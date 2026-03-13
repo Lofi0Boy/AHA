@@ -2,18 +2,9 @@
 
 Inherits common rules from `../CLAUDE.md`.
 
-Respond in Korean. Keep all documents in English.
-
 ---
 
-## Session Start
-
-Read the latest file in `docs/handoff/` and `docs/ROADMAP.md` to understand the current state.
-Refer to `docs/ARCHITECTURE.md` and `README.md` as needed.
-
----
-
-## Project Structure
+## Project Boundary
 
 This project manages other projects in MpmWorkspace. Do not modify files in sibling project directories unless explicitly instructed.
 
