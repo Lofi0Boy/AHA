@@ -1,47 +1,53 @@
 # ROADMAP
 
 ## Overview
-Orchestration system for MpmWorkspace. MPM daemon manages per-project Claude Code sessions, verifies task results, and communicates with the user via web dashboard and Telegram. Currently in **Phase 1**.
+Orchestration system for MpmWorkspace. Phase 1 focuses on a read-only dashboard that visualizes all project progress and next tasks in a single view. Autonomous agent control and communication gateways come in later phases. Currently in **Phase 1**.
 
 ---
 
-## Phase 1: Core Daemon
+## Phase 1: Dashboard
 
-Goal: Working daemon that can spawn and manage Claude Code sessions per project, execute tasks in parallel, and route results to the user.
+Goal: Web dashboard that reads each project's handoff files and ROADMAP, and displays all projects side-by-side as a live thread-style progress view. Read-only — no agent control yet.
 
-- [ ] Project scaffold (directory structure, CLAUDE.md, git init)
+**Layout concept:** One column per project. Each column shows the ROADMAP phase progress and recent handoff entries as a flowing thread (newest at top). At a glance, the user can see where every project stands and what comes next.
+
+- [ ] Project scaffold (directory structure, CLAUDE.md, git init) ✓
+- [ ] Parse handoff files and ROADMAP.md per project
+- [ ] Multi-column thread view (one column per project)
+  - ROADMAP phase + completion status at top
+  - Handoff entries as scrollable thread below
+  - "Next tasks" (unchecked ROADMAP items) highlighted
+- [ ] Auto-refresh (poll handoff directory for new files)
+- [ ] Basic web server (`dashboard/server.py`)
+
+---
+
+## Phase 2: MPM Agent (Autonomous Control)
+
+Goal: MPM daemon spawns and manages Claude Code CLI sessions per project. PM Agent reads ROADMAPs and handoffs, determines next tasks, dispatches to sub-agents, and verifies results — autonomously where possible, escalating to user when needed.
+
 - [ ] `daemon/orchestrator.py` — spawn Claude Code CLI sessions, maintain per-project session IDs
-- [ ] `daemon/state.py` — in-memory + disk state store
+- [ ] `daemon/state.py` — in-memory + disk state store (crash recovery)
 - [ ] Parallel task execution (`asyncio.as_completed`)
-- [ ] Session reset on compaction (detect compaction event → terminate → respawn with handoff)
-- [ ] `daemon/verifier.py` — git log / test run / health check verification per task type
-- [ ] PM Agent loop — reads all project ROADMAPs, determines next tasks, evaluates results
+- [ ] Session reset on compaction event (detect → write handoff → respawn)
+- [ ] `daemon/verifier.py` — git log / test run / health check / screenshot verification
+- [ ] PM Agent loop — reads ROADMAPs, assigns tasks, evaluates results, updates docs
 
 ---
 
-## Phase 2: Gateway (I/O Multiplexer)
+## Phase 3: Gateway (I/O Multiplexer)
 
-Goal: Web dashboard renders daemon output; Telegram bridge toggles on/off.
+Goal: CLI is the base I/O layer. Dashboard renders it live. Telegram bridges it as a toggle.
 
 - [ ] `gateway/multiplexer.py` — route Claude CLI stdout to registered channels
-- [ ] Web dashboard — basic log/output renderer
+- [ ] Dashboard upgraded to show live agent output (not just static handoff files)
 - [ ] `gateway/telegram.py` — forward output to Telegram; inject replies as stdin
 - [ ] Telegram toggle setting
-
----
-
-## Phase 3: Dashboard
-
-Goal: Full web UI for monitoring project status, active sessions, pending decisions, and task history.
-
-- [ ] Project status cards (ROADMAP progress per project)
-- [ ] Active session viewer (live output per sub-agent)
-- [ ] Pending decisions queue (items awaiting user input)
-- [ ] Task history log
+- [ ] Pending decisions queue — items awaiting user input surfaced in dashboard + Telegram
 
 ---
 
 ## External Connections
 
 Part of the **MpmWorkspace** alongside `saksak-kimchi`, `JHomelab_server`, `JHomelab_app`.
-MPM manages these projects but has no runtime dependency on them.
+MPM reads from these projects (handoffs, ROADMAPs) but does not modify their files except through their own Claude Code sessions.

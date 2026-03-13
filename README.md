@@ -1,20 +1,45 @@
 # MPM — Multi-Project Manager
 
-An orchestration system for managing multiple Claude Code agents across projects in the MpmWorkspace.
+A dashboard and orchestration system for managing all projects in MpmWorkspace.
 
-MPM acts as the central control plane: it spawns and manages per-project Claude Code sessions, verifies task results, updates project documentation autonomously, and communicates with the user through multiple channels (CLI, web dashboard, Telegram).
+Phase 1 is a read-only web dashboard: it reads each project's handoff files and ROADMAP, and displays everything in a multi-column thread view — one column per project, showing progress and next tasks at a glance.
+
+Later phases add autonomous agent control (MPM daemon spawning Claude Code sessions per project) and communication gateways (Telegram, live CLI output).
+
+---
+
+## Dashboard (Phase 1)
+
+```
+┌─────────────────┬─────────────────┬─────────────────┐
+│  saksak-kimchi  │ JHomelab_server │  JHomelab_app   │
+│                 │                 │                 │
+│ Phase 1 ██░░░░  │ Phase 1 ██████  │ Phase 1 ██████  │
+│ 11/16 done      │ complete ✓      │ complete ✓      │
+│                 │                 │                 │
+│ Next:           │                 │                 │
+│ · Live test run │                 │                 │
+│ · Return coin   │                 │                 │
+│   selector      │                 │                 │
+│                 │                 │                 │
+│ ── handoff ──   │                 │                 │
+│ 26/03/13        │ 26/03/13        │ 26/03/13        │
+│ Doc restructure │ Scripts reorg   │ Doc restructure │
+│ ...             │ ...             │ ...             │
+└─────────────────┴─────────────────┴─────────────────┘
+```
 
 ---
 
 ## Architecture Overview
 
 ```
-[MPM Daemon — Python process, always running]
+[MPM Daemon — Python process, always running]         ← Phase 2
   ├── Per-project Claude Code sessions (one per project, persistent)
   ├── Async orchestration (parallel sub-agents, as_completed)
   ├── Result verification engine
   ├── ROADMAP + handoff auto-update
-  └── I/O Multiplexer
+  └── I/O Multiplexer                                 ← Phase 3
         ├── Web Dashboard (renders CLI output)
         └── Telegram Bridge (toggle on/off)
 ```
@@ -31,13 +56,13 @@ MPM acts as the central control plane: it spawns and manages per-project Claude 
 
 ---
 
-## Components (planned)
+## Components
 
-| Directory | Role |
-|-----------|------|
-| `daemon/` | Core orchestration process |
-| `dashboard/` | Web UI for monitoring and control |
-| `gateway/` | I/O multiplexer (CLI / Telegram bridge) |
+| Directory | Phase | Role |
+|-----------|-------|------|
+| `dashboard/` | 1 | Web UI — read-only project status view |
+| `daemon/` | 2 | Core orchestration process |
+| `gateway/` | 3 | I/O multiplexer (CLI / Telegram bridge) |
 
 ---
 
