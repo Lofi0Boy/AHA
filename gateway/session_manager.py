@@ -254,18 +254,6 @@ def get_all_sessions() -> list[dict]:
                 project=d.name, tmux_name=name, state=SessionState.OFF,
             ))
 
-    # Also detect external CLI sessions (not in MPM tmux)
-    external = _detect_external_sessions(workspace, patterns, active_tmux)
-    # Merge: update existing entries or add new ones
-    existing_projects = {s.project for s in results}
-    for ext in external:
-        if ext.project in existing_projects:
-            for i, s in enumerate(results):
-                if s.project == ext.project and s.state == SessionState.OFF:
-                    results[i] = ext
-        else:
-            results.append(ext)
-
     return [
         {
             "project": s.project,

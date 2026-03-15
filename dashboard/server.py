@@ -6,6 +6,7 @@ Run from the MPM root:
 """
 
 import json
+import subprocess
 import sys
 import time
 import uuid
@@ -20,6 +21,13 @@ from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO, emit
 
 from gateway.multiplexer import start_polling, subscribe, unsubscribe
+from gateway.pty_bridge import (
+    attach as pty_attach,
+    detach as pty_detach,
+    resize as pty_resize,
+    start_reader as start_pty_reader,
+    write_input as pty_write,
+)
 from gateway.session_manager import (
     capture_pane,
     create_session,
@@ -254,6 +262,53 @@ def api_kill_session(project):
 
 
 # ---------------------------------------------------------------------------
+# Saved CLI commands
+# ---------------------------------------------------------------------------
+
+CLI_CONFIG_PATH = Path(__file__).parent.parent / "data" / "cli_patterns.json"
+
+
+def _load_cli_config() -> dict:
+    return json.loads(CLI_CONFIG_PATH.read_text(encoding="utf-8"))
+
+
+def _save_cli_config(config: dict) -> None:
+    CLI_CONFIG_PATH.write_text(
+        json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
+@app.route("/api/cli-commands")
+def api_cli_commands():
+    config = _load_cli_config()
+    return jsonify(config.get("saved_commands", []))
+
+
+@app.route("/api/config")
+def api_config():
+    config = _load_cli_config()
+    return jsonify({
+        "ssh_host": config.get("ssh_host", ""),
+        "tmux_prefix": config.get("tmux_prefix", "mpm"),
+    })
+
+
+@app.route("/api/cli-commands", methods=["POST"])
+def api_add_cli_command():
+    data = request.get_json(force=True)
+    cmd = data.get("command", "").strip()
+    if not cmd:
+        return jsonify({"error": "command required"}), 400
+    config = _load_cli_config()
+    commands = config.get("saved_commands", [])
+    if cmd not in commands:
+        commands.append(cmd)
+        config["saved_commands"] = commands
+        _save_cli_config(config)
+    return jsonify(commands), 201
+
+
+# ---------------------------------------------------------------------------
 # WebSocket events
 # ---------------------------------------------------------------------------
 
@@ -280,8 +335,69 @@ def ws_send_input(data):
         send_keys(project, text)
 
 
+# PTY-based terminal (xterm.js)
+@socketio.on("pty_attach")
+def ws_pty_attach(data):
+    project = data.get("project")
+    if project:
+        sid = request.sid
+        ok = pty_attach(sid, project)
+        emit("pty_ready", {"ok": ok, "project": project})
+
+
+@socketio.on("pty_input")
+def ws_pty_input(data):
+    sid = request.sid
+    pty_write(sid, data.get("data", ""))
+
+
+@socketio.on("pty_resize")
+def ws_pty_resize(data):
+    sid = request.sid
+    pty_resize(sid, data.get("rows", 24), data.get("cols", 80))
+
+
+@socketio.on("disconnect")
+def ws_disconnect():
+    sid = request.sid
+    pty_detach(sid)
+
+
+# Full-screen terminal page
+@app.route("/terminal/<project_name>")
+def terminal_page(project_name):
+    return render_template("terminal.html", project=project_name)
+
+
+# Open tmux session in native terminal emulator
+@app.route("/api/sessions/<project>/open-terminal", methods=["POST"])
+def api_open_terminal(project):
+    config = json.loads(CLI_CONFIG_PATH.read_text(encoding="utf-8"))
+    prefix = config.get("tmux_prefix", "mpm")
+    tmux_name = f"{prefix}-{project}"
+
+    # Try common terminal emulators in order
+    terminals = [
+        ["gnome-terminal", "--", "tmux", "attach-session", "-t", tmux_name],
+        ["konsole", "-e", "tmux", "attach-session", "-t", tmux_name],
+        ["xfce4-terminal", "-e", f"tmux attach-session -t {tmux_name}"],
+        ["x-terminal-emulator", "-e", f"tmux attach-session -t {tmux_name}"],
+        ["xterm", "-e", "tmux", "attach-session", "-t", tmux_name],
+    ]
+
+    for cmd in terminals:
+        try:
+            subprocess.Popen(cmd, start_new_session=True)
+            return jsonify({"ok": True, "terminal": cmd[0]})
+        except FileNotFoundError:
+            continue
+
+    return jsonify({"error": "No terminal emulator found", "command": f"tmux attach-session -t {tmux_name}"}), 404
+
+
 if __name__ == "__main__":
     port = 5100
     print(f"MPM Dashboard → http://localhost:{port}")
     start_polling(socketio)
+    start_pty_reader(socketio)
     socketio.run(app, host="0.0.0.0", port=port, debug=False, allow_unsafe_werkzeug=True)

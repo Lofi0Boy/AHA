@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ project }} — Terminal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #1e1e1e;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #bar {
+      flex-shrink: 0;
+      height: 32px;
+      background: #2d2d2d;
+      border-bottom: 1px solid #444;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+    }
+    #bar .name {
+      font-family: -apple-system, sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      color: #ccc;
+    }
+    #bar .status {
+      font-family: -apple-system, sans-serif;
+      font-size: 10px;
+      color: #888;
+    }
+    #terminal {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <span class="name">{{ project }}</span>
+    <span class="status" id="status">Connecting...</span>
+  </div>
+  <div id="terminal"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    const project = '{{ project }}';
+    const statusEl = document.getElementById('status');
+
+    const term = new Terminal({
+      cursorBlink: true,
+      fontSize: 13,
+      fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
+      theme: {
+        background: '#1e1e1e',
+        foreground: '#d4d4d4',
+        cursor: '#d4d4d4',
+        selectionBackground: '#444',
+      },
+    });
+
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.loadAddon(new WebLinksAddon.WebLinksAddon());
+    term.open(document.getElementById('terminal'));
+    fitAddon.fit();
+
+    window.addEventListener('resize', () => fitAddon.fit());
+
+    const socket = io();
+
+    socket.on('connect', () => {
+      statusEl.textContent = 'Attaching...';
+      socket.emit('pty_attach', { project });
+    });
+
+    socket.on('pty_ready', data => {
+      if (data.ok) {
+        statusEl.textContent = '';
+        // Send initial size
+        socket.emit('pty_resize', { rows: term.rows, cols: term.cols });
+      } else {
+        statusEl.textContent = 'No tmux session found';
+      }
+    });
+
+    socket.on('pty_output', data => {
+      term.write(data.data);
+    });
+
+    term.onData(data => {
+      socket.emit('pty_input', { data });
+    });
+
+    term.onResize(({ rows, cols }) => {
+      socket.emit('pty_resize', { rows, cols });
+    });
+  </script>
+</body>
+</html>

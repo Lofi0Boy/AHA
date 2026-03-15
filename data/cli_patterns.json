@@ -8,5 +8,11 @@
     "cursor"
   ],
   "workspace": "/home/lofi0boy/MpmWorkspace",
-  "tmux_prefix": "mpm"
+  "tmux_prefix": "mpm",
+  "ssh_host": "lofi0boy@homelab",
+  "saved_commands": [
+    "claude",
+    "codex",
+    "claude --dangerously-skip-permissions"
+  ]
 }
