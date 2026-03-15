@@ -13,10 +13,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import markdown as md_lib
 from flask import Flask, jsonify, render_template, request
 
+from gateway.session_manager import (
+    capture_pane,
+    create_session,
+    get_all_sessions,
+    kill_session,
+    send_keys,
+)
 from projects import WORKSPACE_ROOT, get_all_projects
 
 IDEAS_PATH = Path(__file__).parent.parent / "data" / "ideas.json"
@@ -186,6 +194,60 @@ def api_promote_idea(idea_id):
     _cache["data"] = None
 
     return jsonify({"ok": True, "project": project_name})
+
+
+# ---------------------------------------------------------------------------
+# Sessions (tmux gateway)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/sessions")
+def api_sessions():
+    return jsonify(get_all_sessions())
+
+
+@app.route("/api/sessions", methods=["POST"])
+def api_create_session():
+    data = request.get_json(force=True)
+    project = data.get("project")
+    cli_command = data.get("cli_command")
+    if not project:
+        return jsonify({"error": "project required"}), 400
+    try:
+        info = create_session(project, cli_command)
+        return jsonify({
+            "project": info.project,
+            "tmux_name": info.tmux_name,
+            "state": info.state.value,
+        }), 201
+    except (ValueError, RuntimeError) as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/sessions/<project>/send", methods=["POST"])
+def api_send_keys(project):
+    data = request.get_json(force=True)
+    text = data.get("text", "")
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    ok = send_keys(project, text)
+    if not ok:
+        return jsonify({"error": "Failed to send — session may not exist"}), 404
+    return jsonify({"ok": True})
+
+
+@app.route("/api/sessions/<project>/output")
+def api_capture_output(project):
+    lines = request.args.get("lines", 200, type=int)
+    output = capture_pane(project, lines)
+    return jsonify({"output": output})
+
+
+@app.route("/api/sessions/<project>", methods=["DELETE"])
+def api_kill_session(project):
+    ok = kill_session(project)
+    if not ok:
+        return jsonify({"error": "Session not found"}), 404
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

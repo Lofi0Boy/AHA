@@ -1,0 +1,12 @@
+{
+  "patterns": [
+    "claude",
+    "codex",
+    "opencode",
+    "ohmyopencode",
+    "aider",
+    "cursor"
+  ],
+  "workspace": "/home/lofi0boy/MpmWorkspace",
+  "tmux_prefix": "mpm"
+}
