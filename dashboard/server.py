@@ -17,7 +17,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import markdown as md_lib
 from flask import Flask, jsonify, render_template, request
+from flask_socketio import SocketIO, emit
 
+from gateway.multiplexer import start_polling, subscribe, unsubscribe
 from gateway.session_manager import (
     capture_pane,
     create_session,
@@ -30,6 +32,7 @@ from projects import WORKSPACE_ROOT, get_all_projects
 IDEAS_PATH = Path(__file__).parent.parent / "data" / "ideas.json"
 
 app = Flask(__name__, template_folder="templates")
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 _cache: dict = {"data": None, "at": 0.0}
 CACHE_TTL = 30
@@ -250,7 +253,35 @@ def api_kill_session(project):
     return jsonify({"ok": True})
 
 
+# ---------------------------------------------------------------------------
+# WebSocket events
+# ---------------------------------------------------------------------------
+
+@socketio.on("subscribe")
+def ws_subscribe(data):
+    project = data.get("project")
+    if project:
+        output = subscribe(project)
+        emit("terminal_output", {"project": project, "output": output})
+
+
+@socketio.on("unsubscribe")
+def ws_unsubscribe(data):
+    project = data.get("project")
+    if project:
+        unsubscribe(project)
+
+
+@socketio.on("send_input")
+def ws_send_input(data):
+    project = data.get("project")
+    text = data.get("text", "")
+    if project and text:
+        send_keys(project, text)
+
+
 if __name__ == "__main__":
     port = 5100
     print(f"MPM Dashboard → http://localhost:{port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    start_polling(socketio)
+    socketio.run(app, host="0.0.0.0", port=port, debug=False, allow_unsafe_werkzeug=True)
