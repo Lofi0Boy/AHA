@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MPM Dashboard</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -665,22 +664,48 @@
     }
     .term-card-action:hover { color: var(--text); background: rgba(0,0,0,0.06); }
 
-    /* ---- Terminal panel (bottom slide-up) ---- */
+    /* ---- Terminal panel ---- */
     #terminal-panel {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 45vh;
       background: #1e1e1e;
-      border-top: 2px solid #333;
       display: flex;
       flex-direction: column;
       z-index: 800;
       transform: translateY(100%);
       transition: transform 0.25s ease;
+      /* Bottom mode (default) */
+      bottom: 0; left: 0; right: 0;
+      height: 40vh;
     }
-    #terminal-panel.open { transform: translateY(0); }
+    #terminal-panel.open { transform: translateY(0) translateX(0); }
+
+    /* Right panel mode */
+    #terminal-panel.mode-right {
+      top: var(--header-h); bottom: 0; right: 0;
+      left: auto;
+      width: 45vw; height: auto;
+      transform: translateX(100%);
+      border-top: none;
+      border-left: 2px solid #333;
+    }
+
+    /* Drag handle */
+    .term-resize-handle {
+      position: absolute;
+      z-index: 2;
+      background: transparent;
+    }
+    /* Bottom mode: handle on top edge */
+    #terminal-panel:not(.mode-right) .term-resize-handle {
+      top: -4px; left: 0; right: 0; height: 8px;
+      cursor: ns-resize;
+    }
+    /* Right mode: handle on left edge */
+    #terminal-panel.mode-right .term-resize-handle {
+      top: 0; bottom: 0; left: -4px; width: 8px;
+      cursor: ew-resize;
+    }
+    .term-resize-handle:hover { background: rgba(255,255,255,0.08); }
 
     .term-header {
       flex-shrink: 0;
@@ -719,11 +744,22 @@
 
     .term-xterm {
       flex: 1;
-      overflow: hidden;
+      min-height: 0;
+    }
+    .term-xterm iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
     }
 
-    /* Adjust board when terminal is open */
-    body.term-open #board-wrapper { height: calc(100vh - var(--header-h) - 45vh); }
+    /* Adjust board when terminal is open — bottom */
+    body.term-open:not(.term-right) #board-wrapper {
+      height: calc(100vh - var(--header-h) - var(--term-h, 40vh));
+    }
+    /* Adjust board when terminal is open — right */
+    body.term-open.term-right #board-wrapper {
+      width: calc(100vw - var(--term-w, 45vw));
+    }
 
     /* ---- CLI start dialog (popover) ---- */
     .cli-dialog-overlay {
@@ -833,6 +869,7 @@
 
 <!-- Terminal panel -->
 <div id="terminal-panel">
+  <div class="term-resize-handle" id="term-resize-handle"></div>
   <div class="term-header">
     <span class="status-dot off" id="term-status-dot"></span>
     <span class="term-project-name" id="term-project-name">—</span>
@@ -840,6 +877,7 @@
     <div class="term-header-actions">
       <button class="term-hdr-btn" id="term-start-btn" onclick="startCli()">Start CLI</button>
       <button class="term-hdr-btn" id="term-kill-btn" onclick="killCurrentSession()">Kill CLI</button>
+      <button class="term-hdr-btn" onclick="toggleTermMode()" title="Toggle bottom/right">&#8596;</button>
       <button class="term-hdr-btn" onclick="closeTerminal()">Close</button>
     </div>
   </div>
@@ -876,8 +914,6 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
   const board = document.getElementById('board');
@@ -1118,6 +1154,7 @@
     board.innerHTML = (projects||[]).map(renderCol).join('');
     bindCards();
     applyDetailsState();
+    updateStatusDots();  // Immediately apply session state to avoid flicker
     requestAnimationFrame(fixStreamlines);
   }
 
@@ -1445,48 +1482,6 @@
   const termStatusText = document.getElementById('term-status-text');
   const termStartBtn = document.getElementById('term-start-btn');
 
-  let xterm = null;
-  let fitAddon = null;
-
-  function initXterm() {
-    if (xterm) { xterm.dispose(); }
-    termXtermEl.innerHTML = '';
-    xterm = new Terminal({
-      cursorBlink: true,
-      fontSize: 13,
-      fontFamily: "'Menlo', 'Monaco', 'Consolas', monospace",
-      theme: {
-        background: '#1e1e1e',
-        foreground: '#d4d4d4',
-        cursor: '#d4d4d4',
-        selectionBackground: '#444',
-      },
-    });
-    fitAddon = new FitAddon.FitAddon();
-    xterm.loadAddon(fitAddon);
-    xterm.open(termXtermEl);
-    fitAddon.fit();
-
-    xterm.onData(data => {
-      socket.emit('pty_input', { data });
-    });
-    xterm.onResize(({ rows, cols }) => {
-      socket.emit('pty_resize', { rows, cols });
-    });
-  }
-
-  socket.on('pty_output', data => {
-    if (xterm) xterm.write(data.data);
-  });
-
-  socket.on('pty_ready', data => {
-    if (data.ok && xterm && fitAddon) {
-      fitAddon.fit();
-      socket.emit('pty_resize', { rows: xterm.rows, cols: xterm.cols });
-      xterm.focus();
-    }
-  });
-
   function openTerminal(project, anchorEl) {
     const session = sessionsData.find(s => s.project === project);
     if (!session || session.state === 'off') {
@@ -1494,20 +1489,37 @@
       return;
     }
 
+    // Need ttyd port
+    if (!session.ttyd_port) {
+      // Start ttyd by re-creating session (idempotent)
+      fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project }),
+      }).then(() => loadSessions().then(() => {
+        const s = sessionsData.find(x => x.project === project);
+        if (s && s.ttyd_port) showTerminal(project, s.ttyd_port);
+      }));
+      return;
+    }
+
+    showTerminal(project, session.ttyd_port);
+  }
+
+  function showTerminal(project, ttydPort) {
     termProject = project;
     termProjectName.textContent = project;
     termPanel.classList.add('open');
     document.body.classList.add('term-open');
     updateTermStatus();
 
-    initXterm();
-    socket.emit('pty_attach', { project });
+    // Load ttyd in iframe
+    const host = window.location.hostname;
+    termXtermEl.innerHTML = `<iframe src="http://${host}:${ttydPort}/ttyd/${project}/" allow="clipboard-read; clipboard-write"></iframe>`;
   }
 
   function closeTerminal() {
-    if (xterm) { xterm.dispose(); xterm = null; }
-    // Detach PTY on server side (tmux session stays alive)
-    socket.emit('pty_detach', {});
+    termXtermEl.innerHTML = '';
     termPanel.classList.remove('open');
     document.body.classList.remove('term-open');
     termProject = null;
@@ -1541,44 +1553,53 @@
     openTerminal(project, el);
   }
 
-  let mpmConfig = { ssh_host: '', tmux_prefix: 'mpm' };
+  // ---- Terminal panel resize + mode toggle ----
+  let termMode = 'bottom';  // 'bottom' or 'right'
 
-  async function loadConfig() {
-    try { mpmConfig = await fetch('/api/config').then(r => r.json()); } catch(e) {}
-  }
-
-  function popoutTerminal() {
-    if (!termProject) return;
-    window.open(`/terminal/${encodeURIComponent(termProject)}`, '_blank');
-  }
-
-  function copyToClipboard(text, btnEl) {
-    navigator.clipboard.writeText(text).then(() => {
-      if (btnEl) { const orig = btnEl.textContent; btnEl.textContent = 'Copied!'; setTimeout(() => btnEl.textContent = orig, 1500); }
-    }).catch(() => {
-      prompt('Copy this command:', text);
-    });
-  }
-
-  function copyLocalCmd() {
-    if (!termProject) return;
-    const cmd = `tmux attach-session -t ${mpmConfig.tmux_prefix}-${termProject}`;
-    copyToClipboard(cmd, document.querySelector('[onclick="copyLocalCmd()"]'));
-  }
-
-  function copySshCmd() {
-    if (!termProject) return;
-    const host = mpmConfig.ssh_host || 'user@host';
-    const cmd = `ssh ${host} -t tmux attach-session -t ${mpmConfig.tmux_prefix}-${termProject}`;
-    copyToClipboard(cmd, document.querySelector('[onclick="copySshCmd()"]'));
-  }
-
-  // Refit xterm when panel resizes
-  new ResizeObserver(() => {
-    if (fitAddon && xterm && termPanel.classList.contains('open')) {
-      fitAddon.fit();
+  function toggleTermMode() {
+    termMode = termMode === 'bottom' ? 'right' : 'bottom';
+    if (termMode === 'right') {
+      termPanel.classList.add('mode-right');
+      document.body.classList.add('term-right');
+      document.body.style.setProperty('--term-w', '45vw');
+    } else {
+      termPanel.classList.remove('mode-right');
+      document.body.classList.remove('term-right');
+      document.body.style.setProperty('--term-h', '40vh');
     }
-  }).observe(termXtermEl);
+  }
+
+  // Drag resize handle
+  const resizeHandle = document.getElementById('term-resize-handle');
+  resizeHandle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const isRight = termMode === 'right';
+
+    function onMove(ev) {
+      if (isRight) {
+        const w = window.innerWidth - ev.clientX;
+        const clamped = Math.max(200, Math.min(w, window.innerWidth - 200));
+        termPanel.style.width = clamped + 'px';
+        document.body.style.setProperty('--term-w', clamped + 'px');
+      } else {
+        const h = window.innerHeight - ev.clientY;
+        const clamped = Math.max(120, Math.min(h, window.innerHeight - 100));
+        termPanel.style.height = clamped + 'px';
+        document.body.style.setProperty('--term-h', clamped + 'px');
+      }
+    }
+
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.removeProperty('user-select');
+    }
+
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
 
   // ---- CLI start dialog ----
   let savedCliCommands = [];
@@ -1724,14 +1745,19 @@
     document.getElementById('term-kill-btn').style.display = state === 'off' ? 'none' : '';
   }
 
+  // ---- File change detection (inotify via server) ----
+  socket.on('projects_changed', () => {
+    load();
+  });
+
   // ---- Init ----
   load();
   loadNotes();
   loadSessions();
   loadCliCommands();
-  loadConfig();
-  setInterval(load, 30_000);
   setInterval(loadSessions, 5_000);
+  // Fallback polling for projects (in case inotify misses something)
+  setInterval(load, 120_000);
 </script>
 </body>
 </html>

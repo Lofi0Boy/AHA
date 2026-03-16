@@ -20,14 +20,8 @@ import markdown as md_lib
 from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO, emit
 
+from gateway.file_watcher import start_file_watcher
 from gateway.multiplexer import start_polling, subscribe, unsubscribe
-from gateway.pty_bridge import (
-    attach as pty_attach,
-    detach as pty_detach,
-    resize as pty_resize,
-    start_reader as start_pty_reader,
-    write_input as pty_write,
-)
 from gateway.session_manager import (
     capture_pane,
     create_session,
@@ -335,38 +329,6 @@ def ws_send_input(data):
         send_keys(project, text)
 
 
-# PTY-based terminal (xterm.js)
-@socketio.on("pty_attach")
-def ws_pty_attach(data):
-    project = data.get("project")
-    if project:
-        sid = request.sid
-        ok = pty_attach(sid, project)
-        emit("pty_ready", {"ok": ok, "project": project})
-
-
-@socketio.on("pty_input")
-def ws_pty_input(data):
-    sid = request.sid
-    pty_write(sid, data.get("data", ""))
-
-
-@socketio.on("pty_resize")
-def ws_pty_resize(data):
-    sid = request.sid
-    pty_resize(sid, data.get("rows", 24), data.get("cols", 80))
-
-
-@socketio.on("disconnect")
-def ws_disconnect():
-    sid = request.sid
-    pty_detach(sid)
-
-
-# Full-screen terminal page
-@app.route("/terminal/<project_name>")
-def terminal_page(project_name):
-    return render_template("terminal.html", project=project_name)
 
 
 # Open tmux session in native terminal emulator
@@ -399,5 +361,5 @@ if __name__ == "__main__":
     port = 5100
     print(f"MPM Dashboard → http://localhost:{port}")
     start_polling(socketio)
-    start_pty_reader(socketio)
+    start_file_watcher(socketio)
     socketio.run(app, host="0.0.0.0", port=port, debug=False, allow_unsafe_werkzeug=True)

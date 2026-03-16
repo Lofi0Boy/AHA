@@ -114,6 +114,10 @@ def attach(sid: str, project: str) -> bool:
     if not session.start():
         return False
 
+    # Disable mouse reporting so xterm.js handles scroll locally
+    # These escape sequences turn off various mouse tracking modes
+    session.write(b'\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l')
+
     with _lock:
         _sessions[sid] = session
     return True
