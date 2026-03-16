@@ -1455,9 +1455,26 @@
     }
   });
   document.addEventListener('keydown', e => {
+    // Text input active — don't intercept
+    const ae = document.activeElement;
+    const isTextInput = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable);
+
     if (e.ctrlKey && e.code === 'KeyM') {
       e.preventDefault();
       addNote();
+      return;
+    }
+
+    // Shift+Space — cycle through running sessions
+    if (e.shiftKey && e.code === 'Space') {
+      const runningSessions = sessionsData.filter(s => s.state === 'running' || s.state === 'idle');
+      if (runningSessions.length === 0) return;
+      e.preventDefault();
+
+      const currentIdx = runningSessions.findIndex(s => s.project === termProject);
+      const nextIdx = (currentIdx + 1) % runningSessions.length;
+      const next = runningSessions[nextIdx];
+      openTerminal(next.project);
     }
   });
 
