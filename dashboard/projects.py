@@ -246,13 +246,20 @@ def load_project(project_dir: Path) -> ProjectData:
                     next_tasks=[f"Parse error: {e}"],
                 ))
 
-    # Use latest handoff file's mtime (not filename) — filename = session start,
-    # mtime = when handoff was actually last written
+    # Use the git commit timestamp of the latest handoff file as cutoff.
+    # This ensures the handoff commit itself is not shown as "unhandoffed".
     since_dt = None
     if handoffs:
-        latest_hf_path = handoff_dir / f"{handoffs[0].filename}.md"
-        if latest_hf_path.exists():
-            since_dt = datetime.fromtimestamp(latest_hf_path.stat().st_mtime)
+        latest_hf_rel = f"docs/handoff/{handoffs[0].filename}.md"
+        try:
+            r = subprocess.run(
+                ["git", "-C", str(project_dir), "log", "-1", "--format=%ct", "--", latest_hf_rel],
+                capture_output=True, text=True, timeout=5,
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                since_dt = datetime.fromtimestamp(int(r.stdout.strip()))
+        except Exception:
+            pass
     unhandoffed = get_unhandoffed_commits(project_dir, since_dt)
 
     return ProjectData(
