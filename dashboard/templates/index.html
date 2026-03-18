@@ -1921,8 +1921,12 @@
     }
   }
 
-  // Apply saved mode on load
+  // Apply saved mode on load (disable transition to prevent flash)
+  termPanel.style.transition = 'none';
   applyTermMode();
+  // Force reflow, then re-enable transition
+  termPanel.offsetHeight;
+  termPanel.style.transition = '';
 
   function toggleTermMode() {
     termMode = termMode === 'bottom' ? 'right' : 'bottom';
