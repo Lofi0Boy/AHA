@@ -19,8 +19,8 @@ CONFIG_PATH = Path(__file__).parent.parent / "data" / "cli_patterns.json"
 
 # ttyd ports: base port + project index
 TTYD_BASE_PORT = 7680
-# Track ttyd processes: project -> Popen
-_ttyd_procs: dict[str, subprocess.Popen] = {}
+# Track ttyd processes: project -> Popen | int (PID for reconnected processes)
+_ttyd_procs: dict[str, subprocess.Popen | int] = {}
 
 
 class SessionState(Enum):
@@ -58,26 +58,63 @@ def _tmux_session_name(prefix: str, project: str) -> str:
 
 
 def _get_ttyd_port(project: str) -> int:
-    """Deterministic port for a project based on hash."""
-    return TTYD_BASE_PORT + (hash(project) % 100)
+    """Deterministic port for a project (stable across restarts)."""
+    import hashlib
+    h = int(hashlib.md5(project.encode()).hexdigest(), 16)
+    return TTYD_BASE_PORT + (h % 100)
 
 
 # ---------------------------------------------------------------------------
 # ttyd management
 # ---------------------------------------------------------------------------
 
-def _start_ttyd(project: str, tmux_name: str) -> int:
-    """Start ttyd for a tmux session. Returns the port."""
-    if project in _ttyd_procs:
-        proc = _ttyd_procs[project]
-        if proc.poll() is None:  # still running
-            return _get_ttyd_port(project)
-        # Dead, clean up
+def _is_ttyd_alive(project: str) -> bool:
+    """Check if tracked ttyd process is still running."""
+    entry = _ttyd_procs.get(project)
+    if entry is None:
+        return False
+    if isinstance(entry, int):
+        # Reconnected PID — check via kill(0)
+        try:
+            os.kill(entry, 0)
+            return True
+        except OSError:
+            del _ttyd_procs[project]
+            return False
+    else:
+        # Popen object
+        if entry.poll() is None:
+            return True
         del _ttyd_procs[project]
+        return False
 
-    port = _get_ttyd_port(project)
 
-    # Kill any orphan ttyd on this port (e.g. from previous server run)
+def _kill_orphan_ttyd(tmux_name: str, port: int) -> None:
+    """Kill any orphan ttyd processes for this tmux session or port."""
+    import time as _time
+
+    # 1) Kill ttyd processes attached to the same tmux session (any port)
+    #    Skip PIDs we currently manage (they're being replaced intentionally)
+    our_pids = set()
+    for entry in _ttyd_procs.values():
+        our_pids.add(entry if isinstance(entry, int) else entry.pid)
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", f"ttyd.*{tmux_name}"],
+            capture_output=True, text=True, timeout=3,
+        )
+        for pid_str in result.stdout.strip().splitlines():
+            pid = int(pid_str.strip())
+            if pid in our_pids:
+                continue
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+    # 2) Kill anything still on the target port
     try:
         result = subprocess.run(
             ["fuser", f"{port}/tcp"], capture_output=True, text=True, timeout=3
@@ -85,9 +122,19 @@ def _start_ttyd(project: str, tmux_name: str) -> int:
         if result.stdout.strip():
             subprocess.run(["fuser", "-k", f"{port}/tcp"],
                            capture_output=True, timeout=3)
-            import time; time.sleep(0.5)
     except Exception:
         pass
+
+    _time.sleep(0.3)
+
+
+def _start_ttyd(project: str, tmux_name: str) -> int:
+    """Start ttyd for a tmux session. Returns the port."""
+    if _is_ttyd_alive(project):
+        return _get_ttyd_port(project)
+
+    port = _get_ttyd_port(project)
+    _kill_orphan_ttyd(tmux_name, port)
 
     try:
         proc = subprocess.Popen(
@@ -110,16 +157,19 @@ def _start_ttyd(project: str, tmux_name: str) -> int:
 
 def _stop_ttyd(project: str) -> None:
     """Stop ttyd for a project."""
-    proc = _ttyd_procs.pop(project, None)
-    if proc and proc.poll() is None:
+    entry = _ttyd_procs.pop(project, None)
+    if entry is None:
+        return
+    pid = entry if isinstance(entry, int) else entry.pid
+    try:
+        os.kill(pid, signal.SIGTERM)
+        if isinstance(entry, subprocess.Popen):
+            entry.wait(timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
         try:
-            os.kill(proc.pid, signal.SIGTERM)
-            proc.wait(timeout=3)
-        except (OSError, subprocess.TimeoutExpired):
-            try:
-                os.kill(proc.pid, signal.SIGKILL)
-            except OSError:
-                pass
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +293,7 @@ def get_session_info(project: str) -> SessionInfo:
         return SessionInfo(project=project, tmux_name=name, state=SessionState.OFF)
 
     ttyd_port = None
-    if project in _ttyd_procs and _ttyd_procs[project].poll() is None:
+    if _is_ttyd_alive(project):
         ttyd_port = _get_ttyd_port(project)
 
     cli = _detect_cli_in_session(name, patterns)
@@ -275,6 +325,29 @@ def cleanup_all() -> None:
             _run(["tmux", "kill-session", "-t", name])
 
     print("MPM cleanup: all sessions terminated")
+
+
+def reconnect_ttyd() -> None:
+    """Reconnect to surviving tmux sessions after a server restart.
+
+    For each mpm-prefixed tmux session, kill any orphan ttyd on the
+    expected port and start a fresh ttyd.  tmux sessions are the
+    important state — ttyd is just a disposable web bridge.
+    """
+    config = _load_config()
+    prefix = config.get("tmux_prefix", "mpm")
+
+    for name in list_tmux_sessions():
+        if not name.startswith(f"{prefix}-"):
+            continue
+        project = name[len(prefix) + 1:]
+        if project in _ttyd_procs:
+            continue
+        try:
+            port = _start_ttyd(project, name)
+            print(f"MPM reconnect: ttyd for {project} on port {port}")
+        except RuntimeError as e:
+            print(f"MPM reconnect: failed for {project} — {e}")
 
 
 def get_all_sessions() -> list[dict]:

@@ -64,16 +64,54 @@
   const termEl = document.getElementById('term-xterm');
   let ws = null;
 
-  // ---- Save popup geometry periodically ----
+  // ---- BroadcastChannel ----
+  const ch = new BroadcastChannel('mpm-terminal');
+
+  function broadcast(msg) { ch.postMessage(msg); }
+
+  // Listen for commands from main page
+  ch.onmessage = e => {
+    const d = e.data;
+    if (!d || !d.type) return;
+    // Main page asks this popout to focus itself
+    if (d.type === 'mpm-activate' && d.project === PROJECT) {
+      window.focus();
+      term.focus();
+      broadcast({ type: 'mpm-focus', project: PROJECT });
+    }
+    // Main page refreshed — re-register ourselves
+    if (d.type === 'mpm-ping') {
+      broadcast({ type: 'mpm-popout-register', project: PROJECT });
+    }
+  };
+
+  // ---- Save popup geometry ----
+  let geoTimer = null;
   function saveGeometry() {
     const geo = { x: screenX, y: screenY, w: outerWidth, h: outerHeight };
     localStorage.setItem('termPopGeo_' + PROJECT, JSON.stringify(geo));
   }
-  window.addEventListener('resize', saveGeometry);
-  setInterval(saveGeometry, 2000);
+  function scheduleGeoSave() {
+    clearTimeout(geoTimer);
+    geoTimer = setTimeout(saveGeometry, 300);
+  }
+  window.addEventListener('resize', scheduleGeoSave);
+  window.addEventListener('focus', scheduleGeoSave);
+  document.addEventListener('visibilitychange', scheduleGeoSave);
 
-  // Mark project as popup mode
+  // Restore saved position (works for multi-monitor coords that window.open ignores)
+  const savedGeo = localStorage.getItem('termPopGeo_' + PROJECT);
+  if (savedGeo) {
+    try {
+      const geo = JSON.parse(savedGeo);
+      if (geo.x != null && geo.y != null) window.moveTo(geo.x, geo.y);
+      if (geo.w && geo.h) window.resizeTo(geo.w, geo.h);
+    } catch(e) {}
+  }
+
+  // Register as popout
   localStorage.setItem('termPopOut_' + PROJECT, 'true');
+  broadcast({ type: 'mpm-popout-register', project: PROJECT });
 
   // ---- xterm.js ----
   const term = new Terminal({
@@ -89,20 +127,45 @@
 
   termEl.addEventListener('contextmenu', e => e.preventDefault());
 
-  // Shift+Space — cycle sessions via opener
+  // Keyboard shortcuts
+  let chordSpace = false;
+  let chordTimer = null;
   term.attachCustomKeyEventHandler(e => {
     if (e.type !== 'keydown') return true;
     if (e.shiftKey && e.code === 'Space') {
       e.preventDefault();
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage({ type: 'mpm-cycle-session', from: PROJECT }, '*');
-      }
+      // Focus main window via hash navigation (no reload, user gesture context)
+      window.open(window.location.origin + '/#focus', 'mpm-dashboard');
+      broadcast({ type: 'mpm-cycle-session', from: PROJECT });
+      return false;
+    }
+    if (e.ctrlKey && e.code === 'KeyM') {
+      e.preventDefault();
+      broadcast({ type: 'mpm-add-note' });
+      return false;
+    }
+    // Space → Esc chord — close popout
+    if (e.code === 'Space' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+      chordSpace = true;
+      clearTimeout(chordTimer);
+      chordTimer = setTimeout(() => { chordSpace = false; }, 500);
+    }
+    if (e.code === 'Escape' && chordSpace) {
+      chordSpace = false;
+      clearTimeout(chordTimer);
+      e.preventDefault();
+      window.close();
       return false;
     }
     return true;
   });
 
   term.open(termEl);
+
+  // Reliable focus detection: xterm focus, not window focus
+  // Reliable focus detection via xterm's textarea
+  term.textarea.addEventListener('focus', () => broadcast({ type: 'mpm-focus', project: PROJECT }));
+
   requestAnimationFrame(() => { fitAddon.fit(); term.focus(); });
 
   let lastW = 0, lastH = 0;
@@ -200,9 +263,7 @@
 
   // ---- Actions ----
   function startCli() {
-    if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ type: 'mpm-start-cli', project: PROJECT }, '*');
-    }
+    broadcast({ type: 'mpm-start-cli', project: PROJECT });
   }
 
   async function killSess() {
@@ -215,18 +276,15 @@
   function dockToPanel() {
     localStorage.removeItem('termPopOut_' + PROJECT);
     localStorage.removeItem('termPopGeo_' + PROJECT);
-    if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ type: 'mpm-dock', project: PROJECT }, '*');
-    }
+    broadcast({ type: 'mpm-dock', project: PROJECT });
     window.close();
   }
 
   // ---- Cleanup ----
   window.addEventListener('beforeunload', () => {
     saveGeometry();
-    if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ type: 'mpm-popup-closed', project: PROJECT }, '*');
-    }
+    // termPopOut_ flag stays — next open will reopen as popout
+    broadcast({ type: 'mpm-popout-closed', project: PROJECT });
   });
 
   connect();

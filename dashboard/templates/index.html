@@ -1482,17 +1482,27 @@
       const runningSessions = sessionsData.filter(s => s.state === 'running' || s.state === 'idle');
       if (runningSessions.length === 0) return;
       e.preventDefault();
-      const currentIdx = runningSessions.findIndex(s => s.project === termProject);
+      const ref = focusedProject || termProject;
+      const currentIdx = runningSessions.findIndex(s => s.project === ref);
       const nextIdx = (currentIdx + 1) % runningSessions.length;
       openTerminal(runningSessions[nextIdx].project);
     }
   }
   document.addEventListener('keydown', handleGlobalShortcut);
 
+  // Main window focus → active project = panel project (if open), else null
+  window.addEventListener('focus', () => {
+    if (typeof setFocusedProject === 'function') {
+      const panelOpen = termProject && termPanel && termPanel.classList.contains('open');
+      setFocusedProject(panelOpen ? termProject : null);
+    }
+  });
+
   // ======================================================================
   // TERMINAL PANEL + SOCKETIO
   // ======================================================================
 
+  window.name = 'mpm-dashboard';
   const socket = io();
   let termProject = null;
   let sessionsData = [];
@@ -1504,19 +1514,17 @@
   const termStatusText = document.getElementById('term-status-text');
   const termStartBtn = document.getElementById('term-start-btn');
 
-  // ---- Pop-out window tracking ----
-  const popOutWindows = {}; // project -> window reference
+  // ---- Pop-out window tracking (channel-based, survives refresh) ----
+  const activePopouts = new Set(); // project names with open popout windows
 
   function isPopOut(project) {
-    return popOutWindows[project] && !popOutWindows[project].closed;
+    return activePopouts.has(project);
   }
 
   function openTerminal(project, anchorEl) {
-    // If pop-out window exists, focus it
+    // If pop-out window is currently open, focus it
     if (isPopOut(project)) {
-      popOutWindows[project].focus();
-      termProject = project;
-      updateTermDimming();
+      window.open('', `ttyd-${project}`);
       return;
     }
 
@@ -1526,7 +1534,10 @@
       return;
     }
 
-    // Need ttyd port
+    // Last used as popout? Reopen as popout
+    const prefersPopout = localStorage.getItem('termPopOut_' + project) === 'true';
+
+    // Need ttyd port — request one
     if (!session.ttyd_port) {
       fetch('/api/sessions', {
         method: 'POST',
@@ -1535,19 +1546,14 @@
       }).then(() => loadSessions().then(() => {
         const s = sessionsData.find(x => x.project === project);
         if (s && s.ttyd_port) {
-          // Check popup preference
-          if (localStorage.getItem('termPopOut_' + project) === 'true') {
-            openPopOut(project);
-          } else {
-            showTerminal(project, s.ttyd_port);
-          }
+          if (prefersPopout) openPopOut(project);
+          else showTerminal(project, s.ttyd_port);
         }
       }));
       return;
     }
 
-    // Check popup preference
-    if (localStorage.getItem('termPopOut_' + project) === 'true') {
+    if (prefersPopout) {
       openPopOut(project);
       return;
     }
@@ -1577,6 +1583,8 @@
     term.loadAddon(fitAddon);
 
     // Intercept shortcuts inside terminal
+    let chordSpace = false;
+    let chordTimer = null;
     term.attachCustomKeyEventHandler(e => {
       if (e.type !== 'keydown') return true;
       if (e.shiftKey && e.code === 'Space') {
@@ -1596,8 +1604,15 @@
         setTimeout(() => addNote(), 0);
         return false;
       }
-      // Escape — close terminal
-      if (e.code === 'Escape') {
+      // Space → Esc chord — close terminal
+      if (e.code === 'Space' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
+        chordSpace = true;
+        clearTimeout(chordTimer);
+        chordTimer = setTimeout(() => { chordSpace = false; }, 500);
+      }
+      if (e.code === 'Escape' && chordSpace) {
+        chordSpace = false;
+        clearTimeout(chordTimer);
         e.preventDefault();
         setTimeout(() => closeTerminal(), 0);
         return false;
@@ -1606,6 +1621,9 @@
     });
 
     term.open(container);
+
+    // Panel terminal gets focus → update active project
+    term.textarea.addEventListener('focus', () => setFocusedProject(project));
 
     // Block browser context menu inside terminal
     container.addEventListener('contextmenu', e => e.preventDefault());
@@ -1646,10 +1664,13 @@
     termPanel.classList.add('open');
     document.body.classList.add('term-open');
     updateTermStatus();
-    updateTermDimming();
+    setFocusedProject(project);
 
     const entry = getOrCreateTerm(project, ttydPort);
     entry.container.style.display = 'block';
+
+    // Bring main window to foreground (in case switching from a popout)
+    window.focus();
 
     // Double rAF ensures layout is fully resolved before fitting
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -1741,11 +1762,22 @@
     delete termCache[project];
   }
 
+  // Single source of truth: which project's terminal currently has focus
+  let focusedProject = null;
+
+  function setFocusedProject(project) {
+    focusedProject = project;
+    updateTermDimming();
+  }
+
   function updateTermDimming() {
-    const isOpen = termProject && termPanel.classList.contains('open');
-    boardWrapper.classList.toggle('term-dimmed', !!isOpen);
+    // Show dimming when any terminal is active (panel or popout)
+    const panelOpen = termProject && termPanel.classList.contains('open');
+    const hasActive = panelOpen || focusedProject;
+    const activeProject = focusedProject || termProject;
+    boardWrapper.classList.toggle('term-dimmed', !!hasActive);
     document.querySelectorAll('.col').forEach(col => {
-      col.classList.toggle('term-active', isOpen && col.dataset.project === termProject);
+      col.classList.toggle('term-active', !!hasActive && col.dataset.project === activeProject);
     });
   }
 
@@ -1759,7 +1791,7 @@
     if (geoStr) {
       try {
         const geo = JSON.parse(geoStr);
-        w = geo.w || w; h = geo.h || h; left = geo.x || left; top = geo.y || top;
+        w = geo.w ?? w; h = geo.h ?? h; left = geo.x ?? left; top = geo.y ?? top;
       } catch(e) {}
     }
     const win = window.open(
@@ -1768,8 +1800,17 @@
       `width=${w},height=${h},left=${left},top=${top}`
     );
     if (win) {
-      popOutWindows[project] = win;
+      activePopouts.add(project);
       disposeCachedTerm(project);
+    } else {
+      // Popup blocked by browser
+      const msg = document.getElementById('status');
+      if (msg) {
+        const prev = msg.textContent;
+        msg.textContent = 'Popup blocked — allow popups for this site';
+        msg.style.color = '#e74c3c';
+        setTimeout(() => { msg.textContent = prev; msg.style.color = ''; }, 4000);
+      }
     }
   }
 
@@ -1780,34 +1821,43 @@
     openPopOut(project);
   }
 
-  // Listen for messages from popup windows
-  window.addEventListener('message', e => {
-    if (!e.data || !e.data.type) return;
-    if (e.data.type === 'mpm-popup-closed') {
-      delete popOutWindows[e.data.project];
+  // Listen for messages from popup windows via BroadcastChannel
+  const termChannel = new BroadcastChannel('mpm-terminal');
+  termChannel.onmessage = e => {
+    const d = e.data;
+    if (!d || !d.type) return;
+    if (d.type === 'mpm-popout-register') {
+      activePopouts.add(d.project);
     }
-    if (e.data.type === 'mpm-dock') {
-      delete popOutWindows[e.data.project];
-      // Open in panel
-      const session = sessionsData.find(s => s.project === e.data.project);
+    if (d.type === 'mpm-focus') {
+      setFocusedProject(d.project);
+    }
+    if (d.type === 'mpm-popout-closed') {
+      activePopouts.delete(d.project);
+      // termPopOut_ flag stays — next open will reopen as popout
+      if (focusedProject === d.project) setFocusedProject(null);
+    }
+    if (d.type === 'mpm-dock') {
+      activePopouts.delete(d.project);
+      const session = sessionsData.find(s => s.project === d.project);
       if (session && session.ttyd_port) {
-        showTerminal(e.data.project, session.ttyd_port);
+        showTerminal(d.project, session.ttyd_port);
       }
     }
-    if (e.data.type === 'mpm-cycle-session') {
+    if (d.type === 'mpm-cycle-session') {
       const runningSessions = sessionsData.filter(s => s.state === 'running' || s.state === 'idle');
       if (runningSessions.length === 0) return;
-      const currentIdx = runningSessions.findIndex(s => s.project === e.data.from);
+      const currentIdx = runningSessions.findIndex(s => s.project === d.from);
       const nextIdx = (currentIdx + 1) % runningSessions.length;
       openTerminal(runningSessions[nextIdx].project);
     }
-    if (e.data.type === 'mpm-start-cli') {
-      const session = sessionsData.find(s => s.project === e.data.project);
-      if (session) {
-        openCliDialog(e.data.project);
-      }
+    if (d.type === 'mpm-start-cli') {
+      openCliDialog(d.project);
     }
-  });
+    if (d.type === 'mpm-add-note') {
+      addNote();
+    }
+  };
 
   function closeTerminal() {
     if (termProject && termCache[termProject]) {
@@ -1815,6 +1865,7 @@
     }
     termPanel.classList.remove('open');
     document.body.classList.remove('term-open');
+    if (focusedProject === termProject) focusedProject = null;
     termProject = null;
     updateTermDimming();
     requestAnimationFrame(fixStreamlines);
@@ -2080,6 +2131,9 @@
   setInterval(loadSessions, 5_000);
   // Fallback polling for projects (in case inotify misses something)
   setInterval(load, 120_000);
+
+  // Ask existing popout windows to re-register (in case main page was refreshed)
+  termChannel.postMessage({ type: 'mpm-ping' });
 </script>
 </body>
 </html>

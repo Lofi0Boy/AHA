@@ -30,6 +30,7 @@ from gateway.session_manager import (
     create_session,
     get_all_sessions,
     kill_session,
+    reconnect_ttyd,
     send_keys,
 )
 from projects import WORKSPACE_ROOT, get_all_projects
@@ -37,7 +38,18 @@ from projects import WORKSPACE_ROOT, get_all_projects
 IDEAS_PATH = Path(__file__).parent.parent / "data" / "ideas.json"
 
 app = Flask(__name__, template_folder="templates")
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+
+@app.after_request
+def no_cache(response):
+    """Disable browser caching so server code updates reflect immediately."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 _cache: dict = {"data": None, "at": 0.0}
 CACHE_TTL = 30
@@ -384,22 +396,46 @@ def api_open_terminal(project):
 
 
 if __name__ == "__main__":
-    import atexit
     import signal as _signal
 
     port = 5100
-    print(f"MPM Dashboard → http://localhost:{port}")
+    SHUTDOWN_MARKER = Path(__file__).parent.parent / "data" / ".server_shutdown_at"
+    GRACE_PERIOD = 60  # seconds — sessions survive restarts shorter than this
 
-    atexit.register(cleanup_all)
+    # --- Startup: clean up if server was down longer than grace period ---
+    should_cleanup = False
+    if SHUTDOWN_MARKER.exists():
+        try:
+            down_since = float(SHUTDOWN_MARKER.read_text().strip())
+            elapsed = time.time() - down_since
+            if elapsed > GRACE_PERIOD:
+                print(f"MPM: server was down {elapsed:.0f}s (>{GRACE_PERIOD}s) — cleaning orphan sessions")
+                should_cleanup = True
+            else:
+                print(f"MPM: server was down {elapsed:.0f}s (<{GRACE_PERIOD}s) — keeping sessions alive")
+        except (ValueError, OSError):
+            should_cleanup = True
+        SHUTDOWN_MARKER.unlink(missing_ok=True)
+
+    if should_cleanup:
+        cleanup_all()
+    else:
+        # Always reconnect ttyd for surviving tmux sessions
+        reconnect_ttyd()
 
     def _shutdown(signum, frame):
-        print(f"\nMPM shutting down (signal {signum})…")
-        cleanup_all()
+        print(f"\nMPM shutting down (signal {signum}) — sessions kept for {GRACE_PERIOD}s grace period")
+        try:
+            SHUTDOWN_MARKER.parent.mkdir(parents=True, exist_ok=True)
+            SHUTDOWN_MARKER.write_text(str(time.time()))
+        except OSError:
+            pass
         raise SystemExit(0)
 
     _signal.signal(_signal.SIGTERM, _shutdown)
     _signal.signal(_signal.SIGINT, _shutdown)
 
+    print(f"MPM Dashboard → http://localhost:{port}")
     start_polling(socketio)
     start_file_watcher(socketio)
     socketio.run(app, host="0.0.0.0", port=port, debug=False, allow_unsafe_werkzeug=True)
