@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-CONFIG_PATH = Path(__file__).parent.parent / "data" / "config.json"
+CONFIG_PATH = Path.home() / ".mpm" / "config.json"
 
 
 def _load_config() -> dict:

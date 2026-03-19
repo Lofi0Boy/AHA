@@ -15,15 +15,12 @@ from zoneinfo import ZoneInfo
 
 import requests as http_requests
 
-sys.path.insert(0, str(Path(__file__).parent))
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import markdown as md_lib
 from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO
 
-from gateway.file_watcher import start_file_watcher
-from gateway.session_manager import (
+from mpm.gateway.file_watcher import start_file_watcher
+from mpm.gateway.session_manager import (
     capture_pane,
     cleanup_all,
     create_session,
@@ -32,7 +29,7 @@ from gateway.session_manager import (
     reconnect_ttyd,
     send_keys,
 )
-from projects import (
+from mpm.dashboard.projects import (
     get_all_projects, _load_config as load_projects_config,
     load_future, save_future,
     load_current_tasks, save_current_task, delete_current_task,
@@ -40,7 +37,8 @@ from projects import (
     load_project_md,
 )
 
-IDEAS_PATH = Path(__file__).parent.parent / "data" / "ideas.json"
+MPM_HOME = Path.home() / ".mpm"
+IDEAS_PATH = MPM_HOME / "ideas.json"
 
 
 def _get_tz():
@@ -515,7 +513,7 @@ def api_kill_session(project):
 # Project registration
 # ---------------------------------------------------------------------------
 
-CLI_CONFIG_PATH = Path(__file__).parent.parent / "data" / "config.json"
+CLI_CONFIG_PATH = Path.home() / ".mpm" / "config.json"
 
 
 def _load_cli_config() -> dict:
@@ -627,14 +625,14 @@ def api_ttyd_token(project):
         return jsonify({"error": str(e)}), 502
 
 
-if __name__ == "__main__":
+def start_server():
     import signal as _signal
 
-    port = 5100
-    SHUTDOWN_MARKER = Path(__file__).parent.parent / "data" / ".server_shutdown_at"
-    GRACE_PERIOD = 60  # seconds — sessions survive restarts shorter than this
+    config = load_projects_config()
+    port = config.get("port", 5100)
+    SHUTDOWN_MARKER = MPM_HOME / ".server_shutdown_at"
+    GRACE_PERIOD = 60
 
-    # --- Startup: clean up if server was down longer than grace period ---
     should_cleanup = False
     if SHUTDOWN_MARKER.exists():
         try:
@@ -652,7 +650,6 @@ if __name__ == "__main__":
     if should_cleanup:
         cleanup_all()
     else:
-        # Always reconnect ttyd for surviving tmux sessions
         reconnect_ttyd()
 
     def _shutdown(signum, frame):
@@ -670,3 +667,7 @@ if __name__ == "__main__":
     print(f"MPM Dashboard → http://localhost:{port}")
     start_file_watcher(socketio, cache=_cache)
     socketio.run(app, host="0.0.0.0", port=port, debug=False, allow_unsafe_werkzeug=True)
+
+
+if __name__ == "__main__":
+    start_server()

@@ -1,10 +1,12 @@
 .venv/
 __pycache__/
 *.pyc
+*.egg-info/
+dist/
+build/
+node_modules/
 
-# User data (not for distribution)
-data/ideas.json
-data/config.json
+# Runtime data (not for distribution)
+data/
 .mpm/data/current/
 .mpm/data/past/
-data/.server_shutdown_at

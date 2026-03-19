@@ -8,14 +8,18 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import signal
 import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from shutil import which
 from typing import Optional
 
-CONFIG_PATH = Path(__file__).parent.parent / "data" / "config.json"
+IS_MACOS = platform.system() == "Darwin"
+
+CONFIG_PATH = Path.home() / ".mpm" / "config.json"
 
 # ttyd ports: base port + project index
 TTYD_BASE_PORT = 7680
@@ -116,12 +120,22 @@ def _kill_orphan_ttyd(tmux_name: str, port: int) -> None:
 
     # 2) Kill anything still on the target port
     try:
-        result = subprocess.run(
-            ["fuser", f"{port}/tcp"], capture_output=True, text=True, timeout=3
-        )
-        if result.stdout.strip():
-            subprocess.run(["fuser", "-k", f"{port}/tcp"],
-                           capture_output=True, timeout=3)
+        if IS_MACOS:
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}"], capture_output=True, text=True, timeout=3
+            )
+            for pid_str in result.stdout.strip().splitlines():
+                try:
+                    os.kill(int(pid_str.strip()), signal.SIGTERM)
+                except (OSError, ValueError):
+                    pass
+        else:
+            result = subprocess.run(
+                ["fuser", f"{port}/tcp"], capture_output=True, text=True, timeout=3
+            )
+            if result.stdout.strip():
+                subprocess.run(["fuser", "-k", f"{port}/tcp"],
+                               capture_output=True, timeout=3)
     except Exception:
         pass
 
@@ -139,7 +153,7 @@ def _start_ttyd(project: str, tmux_name: str) -> int:
     try:
         proc = subprocess.Popen(
             [
-                "/usr/bin/ttyd", "--port", str(port),
+                which("ttyd") or "ttyd", "--port", str(port),
                 "--writable",
                 "--base-path", f"/ttyd/{project}",
                 "-t", "enableSizeOverlay=false",
@@ -152,7 +166,8 @@ def _start_ttyd(project: str, tmux_name: str) -> int:
         _ttyd_procs[project] = proc
         return port
     except FileNotFoundError:
-        raise RuntimeError("ttyd not found — install with: snap install ttyd --classic")
+        hint = "brew install ttyd" if IS_MACOS else "snap install ttyd --classic"
+        raise RuntimeError(f"ttyd not found — install with: {hint}")
 
 
 def _stop_ttyd(project: str) -> None:
@@ -269,7 +284,15 @@ def _detect_cli_in_session(tmux_name: str, patterns: list[str]) -> Optional[tupl
 
     pane_pid = pane_pid_str.splitlines()[0].strip()
 
-    rc, children = _run(["ps", "--ppid", pane_pid, "-o", "pid=,comm=", "--no-headers"])
+    if IS_MACOS:
+        # macOS ps doesn't support --ppid; use pgrep -P to find children
+        rc_pg, child_pids = _run(["pgrep", "-P", pane_pid])
+        if rc_pg != 0 or not child_pids:
+            return None
+        pids_csv = ",".join(child_pids.splitlines())
+        rc, children = _run(["ps", "-o", "pid=,comm=", "-p", pids_csv])
+    else:
+        rc, children = _run(["ps", "--ppid", pane_pid, "-o", "pid=,comm=", "--no-headers"])
     if rc != 0 or not children:
         return None
 
