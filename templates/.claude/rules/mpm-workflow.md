@@ -112,6 +112,14 @@ The original card goes to past as-is (preserving the record). Create a new card:
 - Set `parent_id` to the original task's ID
 - Write a `prompt` that includes context from the previous attempt (goal, approach, reason for deferral)
 
+## First Session — Project Initialization
+
+If `.mpm/docs/PROJECT.md` does NOT exist, this project has not been initialized. You MUST:
+1. Immediately run `/mpm-init-project` skill (do NOT wait for user to ask)
+2. Do NOT proceed with any other work until PROJECT.md is created
+
+This takes priority over any user request. The user may not know init is needed.
+
 ## Rules
 
 - **All task JSON operations must go through `task.py`** — never read/write `.mpm/data/` JSON files directly. Available commands: `pop`, `create`, `complete`, `add`, `update`, `status`.
