@@ -24,9 +24,9 @@ All locations use the same schema. Fields are filled progressively:
   "id": "unique_id",
   "title": "One-line summary",
   "prompt": "Detailed task instruction",
-  "goal": "Refined goal (fill on current entry)",
+  "goal": "Verifiable acceptance criteria — WHAT must be true (fill on current entry)",
   "approach": "How to accomplish (fill on current entry)",
-  "verification": "Concrete steps to verify success — HOW will you check? (fill on current entry)",
+  "verification": "HOW will you check the goal is met (fill on current entry)",
   "result": "Actual outcome (fill on completion)",
   "memo": "Notes (fill on completion)",
   "status": "queued | active | success | postpone | modified | discard",
@@ -36,16 +36,55 @@ All locations use the same schema. Fields are filled progressively:
 }
 ```
 
+## Session ID
+
+Get the current session ID from the hook log:
+```bash
+grep "session=" /tmp/mpm-hook.log | tail -1 | sed 's/.*session=//'
+```
+
 ## Workflow
 
 ### 1. Start a task
 
-Pop from the front (index 0) of `future.json` and save to `current/{session_id}.json`.
+**From queue:** Pop from the front (index 0) of `future.json` and save to `current/{session_id}.json`.
+
+**From conversation:** If there is no current task and the user requests work that involves code changes, immediately create a current task. Do this BEFORE starting the actual work.
+
+```bash
+# Get session ID, then create
+SID=$(grep "session=" /tmp/mpm-hook.log | tail -1 | sed 's/.*session=//')
+python3 .mpm/scripts/task.py create "$SID" "title" "prompt"
+python3 .mpm/scripts/task.py update "$SID" goal "..."
+python3 .mpm/scripts/task.py update "$SID" approach "..."
+python3 .mpm/scripts/task.py update "$SID" verification "..."
+```
+
+**How to judge "work that involves code changes":**
+- YES → create task: "Change the border color", "Add this feature", "Fix this bug"
+- YES → create task: User starts with a question but then says "OK do it" — create task before first edit
+- NO → no task: "How does this work?", "What's the next task?", "Why is this error happening?"
+
 Fill `goal`, `approach`, `verification`, set `status` to `active`, set `session_id`.
 
-**verification must describe HOW you will verify**, not just WHAT should be true.
-- Bad: "Tests pass"
-- Good: "Run `pytest tests/` and confirm all tests pass. Take a headless Chrome screenshot of the dashboard and visually confirm the card renders correctly."
+**goal = WHAT** must be true (verifiable acceptance criteria, as a checklist).
+**verification = HOW** you will check each goal item.
+
+Available verification methods (prefer self-verification when possible):
+- **Claude in Chrome** (`/chrome`): interact with live pages — click, type, scroll, read console logs. Best for UI interaction flows, form validation, visual checks with real browser context
+- **Headless Chrome screenshot**: `google-chrome --headless --screenshot=... --virtual-time-budget=5000 URL` — for quick static visual checks
+- **curl + parse**: `curl -s URL | grep/jq ...` — for API responses, served HTML content
+- **Run tests**: `pytest`, `npm test`, etc.
+- **Script execution**: run the modified code and check output
+- **File inspection**: verify generated/modified files contain expected content
+- **Ask user**: ONLY when the above methods genuinely cannot verify (e.g., subjective design quality, interaction flow requiring real browser input)
+
+Example — title: "Dashboard live refresh"
+- goal: "JSON changes in future/current/past reflected on dashboard within 2s without manual refresh"
+- verification: "Edit a task JSON via task.py, then curl /api/projects and confirm the change appears in response"
+
+Bad verification: "Ask user to check the UI" (when you could take a screenshot or curl the API)
+Good verification: "Take headless Chrome screenshot and visually confirm layout. curl /api/projects to verify data."
 
 ### 2. Do the work
 
@@ -53,7 +92,10 @@ Work normally. No need to update the task file mid-work.
 
 ### 3. Complete the work
 
-When done, fill the `result` field with the outcome including verification results.
+When done, fill the `result` field with the actual outcome including verification results.
+
+Also fill `memo` with a brief summary of ALL work done during the session — the task may have started as "Fix border color" but the conversation may have led to additional changes. The memo captures what actually happened, not just the original goal.
+
 The Stop hook will then ask the user for confirmation.
 
 ### 4. User confirmation
@@ -72,6 +114,7 @@ The original card goes to past as-is (preserving the record). Create a new card:
 
 ## Rules
 
+- **All task JSON operations must go through `task.py`** — never read/write `.mpm/data/` JSON files directly. Available commands: `pop`, `create`, `complete`, `add`, `update`, `status`.
 - Always pop from the **front** (index 0) of future.json.
 - Append new tasks to the **back** of future.json.
 - Move to past **immediately** when a result is confirmed — not on a date boundary.

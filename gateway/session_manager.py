@@ -15,7 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-CONFIG_PATH = Path(__file__).parent.parent / "data" / "cli_patterns.json"
+CONFIG_PATH = Path(__file__).parent.parent / "data" / "config.json"
 
 # ttyd ports: base port + project index
 TTYD_BASE_PORT = 7680
@@ -41,7 +41,7 @@ class SessionInfo:
 
 def _load_config() -> dict:
     if not CONFIG_PATH.exists():
-        return {"patterns": [], "workspace": "", "tmux_prefix": "mpm"}
+        return {"patterns": [], "projects": [], "tmux_prefix": "mpm"}
     return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
 
@@ -183,15 +183,22 @@ def list_tmux_sessions() -> list[str]:
     return out.splitlines()
 
 
+def _find_project_dir(config: dict, project: str) -> Optional[str]:
+    """Find the full path for a project name from the config projects list."""
+    for p in config.get("projects", []):
+        if Path(p).name == project:
+            return p
+    return None
+
+
 def create_session(project: str, cli_command: Optional[str] = None) -> SessionInfo:
     config = _load_config()
     prefix = config.get("tmux_prefix", "mpm")
-    workspace = config.get("workspace", "")
     name = _tmux_session_name(prefix, project)
-    project_dir = os.path.join(workspace, project)
+    project_dir = _find_project_dir(config, project)
 
-    if not os.path.isdir(project_dir):
-        raise ValueError(f"Project directory not found: {project_dir}")
+    if not project_dir or not os.path.isdir(project_dir):
+        raise ValueError(f"Project directory not found: {project}")
 
     # Check if session already exists
     if name in list_tmux_sessions():
@@ -352,24 +359,23 @@ def reconnect_ttyd() -> None:
 
 def get_all_sessions() -> list[dict]:
     config = _load_config()
-    workspace = config.get("workspace", "")
+    projects = config.get("projects", [])
     prefix = config.get("tmux_prefix", "mpm")
-
-    if not workspace or not os.path.isdir(workspace):
-        return []
 
     active_tmux = set(list_tmux_sessions())
     results: list[SessionInfo] = []
 
-    for d in sorted(Path(workspace).iterdir()):
-        if not d.is_dir() or d.name.startswith("."):
+    for project_path in projects:
+        d = Path(project_path)
+        if not d.is_dir():
             continue
-        name = _tmux_session_name(prefix, d.name)
+        project_name = d.name
+        name = _tmux_session_name(prefix, project_name)
         if name in active_tmux:
-            results.append(get_session_info(d.name))
+            results.append(get_session_info(project_name))
         else:
             results.append(SessionInfo(
-                project=d.name, tmux_name=name, state=SessionState.OFF,
+                project=project_name, tmux_name=name, state=SessionState.OFF,
             ))
 
     return [

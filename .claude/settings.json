@@ -18,6 +18,10 @@
           {
             "type": "command",
             "command": ".mpm/scripts/hook-notify.sh working"
+          },
+          {
+            "type": "command",
+            "command": ".mpm/scripts/hook-task-reminder.sh"
           }
         ]
       }
@@ -29,6 +33,10 @@
           {
             "type": "command",
             "command": ".mpm/scripts/hook-notify.sh waiting"
+          },
+          {
+            "type": "command",
+            "command": ".mpm/scripts/hook-autonext-stop.sh"
           }
         ]
       }

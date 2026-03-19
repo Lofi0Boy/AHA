@@ -33,10 +33,24 @@ Only ask about what the scan didn't reveal:
 
 ## Step 4: Write PROJECT.md
 
-Write to `.mpm/docs/PROJECT.md`. Structure is flexible, but at minimum cover:
-- What the project is (identity)
-- Where it is now (current state)
-- Where it's going (direction)
+Write to `.mpm/docs/PROJECT.md`.
+
+**Required structure:**
+```markdown
+# Project Name (MUST be in English)
+
+First paragraph is the project description (displayed on the dashboard header).
+
+## ... (optional sections — content can be any language)
+```
+
+**IMPORTANT:** The `# heading` (project name) MUST be written in English — MPM uses it as a machine-readable identifier. The description and body content can be in any language.
+
+The dashboard parses:
+- **`# heading`** → project display name (English required)
+- **First non-empty line after `#`** (before any `##`) → description
+
+Everything after is free-form — cover identity, current state, and direction as needed.
 
 Show the result to the user and save after confirmation.
 Always respond in the user's language.

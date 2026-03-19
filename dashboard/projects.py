@@ -1,5 +1,5 @@
 """
-Parse project data and load .mpm/ task system for each project in MpmWorkspace.
+Parse project data and load .mpm/ task system for each registered project.
 """
 
 from __future__ import annotations
@@ -10,7 +10,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-WORKSPACE_ROOT = Path(__file__).parent.parent.parent
+CONFIG_PATH = Path(__file__).parent.parent / "data" / "config.json"
+
+
+def _load_config() -> dict:
+    if not CONFIG_PATH.exists():
+        return {"projects": []}
+    return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -79,11 +85,13 @@ def load_past(project_dir: Path, date_str: str | None = None) -> list:
         return []
     if date_str:
         return _load_json(past_dir / f"{date_str}.json", default=[])
-    # Load all past files, newest first
+    # Load all past files, sort by created timestamp (oldest first)
+    # Frontend reverses for display (newest on top)
     tasks = []
-    for f in sorted(past_dir.glob("*.json"), reverse=True):
+    for f in sorted(past_dir.glob("*.json")):
         day_tasks = _load_json(f, default=[])
         tasks.extend(day_tasks)
+    tasks.sort(key=lambda t: t.get("created", ""))
     return tasks
 
 
@@ -110,36 +118,44 @@ def load_project_md(project_dir: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-# ---------------------------------------------------------------------------
-# Legacy compat aliases (status/next_tasks/history → new structure)
-# ---------------------------------------------------------------------------
+def parse_project_md(project_dir: Path) -> tuple[str, str]:
+    """Extract project name and description from PROJECT.md.
 
-def load_status(project_dir: Path) -> dict:
-    """Return first current task as status, or empty dict."""
-    tasks = load_current_tasks(project_dir)
-    return tasks[0] if tasks else {}
+    Required structure:
+        # Project Name
+        ...
+        ## Description
+        Description text...
 
+    Returns (project_name, description). Falls back to dir name and empty string.
+    """
+    text = load_project_md(project_dir)
+    if not text:
+        return project_dir.name, ""
 
-def save_status(project_dir: Path, data: dict) -> None:
-    session_id = data.get("session_id", "unknown")
-    save_current_task(project_dir, session_id, data)
+    # Extract project name from first H1
+    project_name = project_dir.name
+    m = re.match(r"^#\s+(.+)", text, re.MULTILINE)
+    if m:
+        project_name = m.group(1).strip()
 
+    # Extract description: first non-empty line after # heading (before any ## section)
+    description = ""
+    lines = text.splitlines()
+    past_h1 = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("# ") and not stripped.startswith("## "):
+            past_h1 = True
+            continue
+        if past_h1:
+            if stripped.startswith("## "):
+                break
+            if stripped:
+                description = stripped
+                break
 
-def load_next_tasks(project_dir: Path) -> list:
-    return load_future(project_dir)
-
-
-def save_next_tasks(project_dir: Path, data: list) -> None:
-    save_future(project_dir, data)
-
-
-def load_history(project_dir: Path) -> list:
-    return load_past(project_dir)
-
-
-def save_history(project_dir: Path, data: list) -> None:
-    # Legacy: overwrite is not supported in v2, use append_past instead
-    pass
+    return project_name, description
 
 
 # ---------------------------------------------------------------------------
@@ -147,257 +163,51 @@ def save_history(project_dir: Path, data: list) -> None:
 # ---------------------------------------------------------------------------
 
 @dataclass
-class CheckItem:
-    text: str
-    done: bool
-
-
-@dataclass
-class Phase:
-    number: int
-    name: str
-    goal: str
-    items: list[CheckItem] = field(default_factory=list)
-
-    @property
-    def done_count(self) -> int:
-        return sum(1 for i in self.items if i.done)
-
-    @property
-    def total_count(self) -> int:
-        return len(self.items)
-
-    @property
-    def is_complete(self) -> bool:
-        return self.total_count > 0 and self.done_count == self.total_count
-
-    def to_dict(self) -> dict:
-        return {
-            "number": self.number,
-            "name": self.name,
-            "goal": self.goal,
-            "done_count": self.done_count,
-            "total_count": self.total_count,
-            "is_complete": self.is_complete,
-            "items": [{"text": i.text, "done": i.done} for i in self.items],
-        }
-
-
-@dataclass
-class Commit:
-    """Legacy handoff commit entry."""
-    number: int
-    timestamp: str
-    summary: str
-    details: str
-
-    def to_dict(self) -> dict:
-        return {
-            "number": self.number,
-            "timestamp": self.timestamp,
-            "summary": self.summary,
-            "details": self.details,
-        }
-
-
-@dataclass
-class Handoff:
-    """Legacy handoff file (docs/handoff/*.md)."""
-    filename: str
-    commits: list[Commit]
-    next_tasks: list[str]
-
-    @property
-    def headline(self) -> str:
-        if self.commits:
-            return self.commits[0].summary
-        return "—"
-
-    def to_dict(self) -> dict:
-        return {
-            "filename": self.filename,
-            "headline": self.headline,
-            "commits": [c.to_dict() for c in self.commits],
-            "next_tasks": self.next_tasks,
-        }
-
-
-@dataclass
 class ProjectData:
     name: str
-    phases: list[Phase]
-    handoffs: list[Handoff]
+    project_name: str = ""
+    description: str = ""
     current_tasks: list[dict] = field(default_factory=list)
     future_tasks: list[dict] = field(default_factory=list)
     past_tasks: list[dict] = field(default_factory=list)
     project_md: str = ""
-    description: str = ""
     error: Optional[str] = None
 
-    # Legacy compat
-    @property
-    def status(self) -> Optional[dict]:
-        return self.current_tasks[0] if self.current_tasks else None
-
-    @property
-    def next_tasks(self) -> list[dict]:
-        return self.future_tasks
-
-    @property
-    def history(self) -> list[dict]:
-        return self.past_tasks
-
-    def current_phase(self) -> Optional[Phase]:
-        for phase in self.phases:
-            if not phase.is_complete:
-                return phase
-        return self.phases[-1] if self.phases else None
-
     def to_dict(self) -> dict:
-        cp = self.current_phase()
         return {
             "name": self.name,
-            "phases": [p.to_dict() for p in self.phases],
-            "current_phase": cp.to_dict() if cp else None,
-            "handoffs": [h.to_dict() for h in self.handoffs],
+            "project_name": self.project_name,
+            "description": self.description,
             "current_tasks": self.current_tasks,
             "future_tasks": self.future_tasks,
             "past_tasks": self.past_tasks,
             "project_md": self.project_md,
-            # Legacy compat keys
-            "status": self.status,
-            "next_tasks": self.next_tasks,
-            "history": self.history,
-            "description": self.description,
             "error": self.error,
         }
 
 
 # ---------------------------------------------------------------------------
-# Parsers
+# Loaders
 # ---------------------------------------------------------------------------
-
-def parse_roadmap(path: Path) -> list[Phase]:
-    text = path.read_text(encoding="utf-8")
-    phases: list[Phase] = []
-
-    for section in re.split(r"^## ", text, flags=re.MULTILINE):
-        m = re.match(r"Phase (\d+):\s*(.+)", section)
-        if not m:
-            continue
-
-        number = int(m.group(1))
-        name = m.group(2).strip()
-
-        goal_m = re.search(r"^Goal:\s*(.+)", section, re.MULTILINE)
-        goal = goal_m.group(1).strip() if goal_m else ""
-
-        items: list[CheckItem] = []
-        for item_m in re.finditer(r"^- \[(x| )\] (.+)", section, re.MULTILINE):
-            done = item_m.group(1) == "x"
-            text = item_m.group(2).strip().rstrip(" ✓").strip()
-            items.append(CheckItem(text=text, done=done))
-
-        phases.append(Phase(number=number, name=name, goal=goal, items=items))
-
-    return phases
-
-
-def parse_handoff(path: Path) -> Handoff:
-    """Parse legacy handoff files (### Commit N format)."""
-    text = path.read_text(encoding="utf-8")
-    filename = path.stem
-    commits: list[Commit] = []
-    next_tasks: list[str] = []
-
-    session_m = re.search(
-        r"^## This Session\s*\n(.*?)(?=^## |\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    if session_m:
-        for cs in re.split(r"^### ", session_m.group(1), flags=re.MULTILINE):
-            cm = re.match(r"Commit (\d+) \((\w+)\) — (.+?)\n(.*)", cs, re.DOTALL)
-            if not cm:
-                continue
-            commits.append(Commit(
-                number=int(cm.group(1)),
-                timestamp=cm.group(2),
-                summary=cm.group(3).strip(),
-                details=cm.group(4).strip(),
-            ))
-
-    next_m = re.search(
-        r"^## Next Tasks\s*\n(.*?)(?=^## |\Z)",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    if next_m:
-        for task_m in re.finditer(r"^- \[ \] (.+)", next_m.group(1), re.MULTILINE):
-            next_tasks.append(task_m.group(1).strip())
-
-    return Handoff(filename=filename, commits=commits, next_tasks=next_tasks)
-
-
-def load_project_description(project_dir: Path) -> str:
-    """Extract first non-header paragraph from README.md."""
-    readme = project_dir / "README.md"
-    if not readme.exists():
-        return ""
-    try:
-        text = readme.read_text(encoding="utf-8")
-        for line in text.splitlines():
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            return stripped
-        return ""
-    except Exception:
-        return ""
-
 
 def load_project(project_dir: Path) -> ProjectData:
     name = project_dir.name
-
-    # Try ROADMAP.md (legacy) or PROJECT.md (v2)
-    roadmap_path = project_dir / "docs" / "ROADMAP.md"
-    phases: list[Phase] = []
-    if roadmap_path.exists():
-        try:
-            phases = parse_roadmap(roadmap_path)
-        except Exception as e:
-            return ProjectData(name=name, phases=[], handoffs=[], error=f"ROADMAP parse error: {e}")
-
-    # Legacy handoffs
-    handoffs: list[Handoff] = []
-    handoff_dir = project_dir / "docs" / "handoff"
-    if handoff_dir.exists():
-        for hf in sorted(handoff_dir.glob("*.md"), reverse=True):
-            try:
-                handoffs.append(parse_handoff(hf))
-            except Exception as e:
-                handoffs.append(Handoff(
-                    filename=hf.stem,
-                    commits=[],
-                    next_tasks=[f"Parse error: {e}"],
-                ))
+    project_name, description = parse_project_md(project_dir)
 
     # Task system v2
     current_tasks = load_current_tasks(project_dir)
     future_tasks = load_future(project_dir)
     past_tasks = load_past(project_dir)
     project_md = load_project_md(project_dir)
-    description = load_project_description(project_dir)
 
     return ProjectData(
         name=name,
-        phases=phases,
-        handoffs=handoffs,
+        project_name=project_name,
+        description=description,
         current_tasks=current_tasks,
         future_tasks=future_tasks,
         past_tasks=past_tasks,
         project_md=project_md,
-        description=description,
     )
 
 
@@ -406,14 +216,14 @@ def load_project(project_dir: Path) -> ProjectData:
 # ---------------------------------------------------------------------------
 
 def get_all_projects() -> list[dict]:
+    config = _load_config()
+    project_paths = config.get("projects", [])
     projects: list[ProjectData] = []
-    for d in sorted(WORKSPACE_ROOT.iterdir()):
-        if not d.is_dir() or d.name.startswith("."):
+    for p in project_paths:
+        d = Path(p)
+        if not d.is_dir():
             continue
-        # Recognize project if it has ROADMAP.md (legacy) or .mpm/ (v2)
-        has_roadmap = (d / "docs" / "ROADMAP.md").exists()
-        has_mpm = (d / ".mpm").is_dir()
-        if not has_roadmap and not has_mpm:
+        if not (d / ".mpm").is_dir():
             continue
         projects.append(load_project(d))
     return [p.to_dict() for p in projects]

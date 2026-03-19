@@ -6,7 +6,6 @@ Run from the MPM root:
 """
 
 import json
-import subprocess
 import sys
 import time
 import uuid
@@ -20,10 +19,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import markdown as md_lib
 from flask import Flask, jsonify, render_template, request
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 
 from gateway.file_watcher import start_file_watcher
-from gateway.multiplexer import start_polling, subscribe, unsubscribe
 from gateway.session_manager import (
     capture_pane,
     cleanup_all,
@@ -34,15 +32,11 @@ from gateway.session_manager import (
     send_keys,
 )
 from projects import (
-    WORKSPACE_ROOT, get_all_projects,
+    get_all_projects, _load_config as load_projects_config,
     load_future, save_future,
     load_current_tasks, save_current_task, delete_current_task,
     load_past, append_past,
     load_project_md,
-    # Legacy compat
-    load_status, save_status,
-    load_next_tasks, save_next_tasks,
-    load_history, save_history,
 )
 
 IDEAS_PATH = Path(__file__).parent.parent / "data" / "ideas.json"
@@ -96,31 +90,65 @@ def api_refresh():
     return jsonify({"projects": projects, "updated_at": _cache["at"]})
 
 
-@app.route("/api/doc/<project_name>/<doc_type>")
-def api_doc(project_name, doc_type):
-    if "/" in project_name or ".." in project_name:
-        return jsonify({"error": "Invalid project name"}), 400
-
-    doc_map = {
-        "roadmap": "docs/ROADMAP.md",
-        "readme": "README.md",
-        "architecture": "docs/ARCHITECTURE.md",
-    }
-    rel_path = doc_map.get(doc_type.lower())
-    if not rel_path:
-        return jsonify({"error": "Unknown doc type"}), 400
-
-    project_dir = WORKSPACE_ROOT / project_name
-    if not project_dir.is_dir():
+@app.route("/api/docs/<project_name>")
+def api_docs_list(project_name):
+    """List all .md files in a project directory (including .mpm/docs/)."""
+    d = _project_dir(project_name)
+    if not d:
         return jsonify({"error": "Project not found"}), 404
 
-    doc_path = project_dir / rel_path
+    files = []
+    for md_path in sorted(d.rglob("*.md")):
+        rel = md_path.relative_to(d)
+        # Skip node_modules, .git, etc.
+        parts = rel.parts
+        if any(p.startswith(".") and p != ".mpm" for p in parts):
+            continue
+        if "node_modules" in parts or "__pycache__" in parts:
+            continue
+        files.append(str(rel))
+    return jsonify({"files": files})
+
+
+@app.route("/api/docs/<project_name>/<path:file_path>")
+def api_doc_read(project_name, file_path):
+    """Read a markdown file. Returns raw content and rendered HTML."""
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+
+    if ".." in file_path:
+        return jsonify({"error": "Invalid path"}), 400
+
+    doc_path = d / file_path
     if not doc_path.exists():
         return jsonify({"error": "File not found"}), 404
 
     raw = doc_path.read_text(encoding="utf-8")
     html = md_lib.markdown(raw, extensions=["tables", "fenced_code"])
-    return jsonify({"html": html})
+    return jsonify({"raw": raw, "html": html})
+
+
+@app.route("/api/docs/<project_name>/<path:file_path>", methods=["PUT"])
+def api_doc_write(project_name, file_path):
+    """Save a markdown file."""
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+
+    if ".." in file_path:
+        return jsonify({"error": "Invalid path"}), 400
+
+    doc_path = d / file_path
+    if not doc_path.exists():
+        return jsonify({"error": "File not found"}), 404
+
+    data = request.get_json(force=True)
+    content = data.get("content", "")
+    doc_path.write_text(content, encoding="utf-8")
+    html = md_lib.markdown(content, extensions=["tables", "fenced_code"])
+    _cache["data"] = None  # Invalidate project cache
+    return jsonify({"ok": True, "html": html})
 
 
 # ---------------------------------------------------------------------------
@@ -197,11 +225,14 @@ def api_promote_idea(idea_id):
 
     data = request.get_json(force=True) if request.is_json else {}
     project_name = data.get("project_name") or idea["title"].strip().replace(" ", "_")
+    parent_dir = data.get("parent_dir", "")
 
     if not project_name or "/" in project_name or ".." in project_name:
         return jsonify({"error": "Invalid project name"}), 400
+    if not parent_dir or not Path(parent_dir).is_dir():
+        return jsonify({"error": "parent_dir required (existing directory)"}), 400
 
-    project_dir = WORKSPACE_ROOT / project_name
+    project_dir = Path(parent_dir) / project_name
     if project_dir.exists():
         return jsonify({"error": "Project directory already exists"}), 409
 
@@ -213,17 +244,24 @@ def api_promote_idea(idea_id):
     readme = f"# {idea['title']}\n\n{idea['description']}\n"
     (project_dir / "README.md").write_text(readme, encoding="utf-8")
 
-    roadmap = (
-        f"## Overview\n{idea['title']}\n\n"
-        f"## Phase 1: Planning\n"
-        f"Goal: {idea['description'] or 'TBD'}\n\n"
-        f"- [ ] Define scope and requirements\n"
-    )
-    (project_dir / "docs" / "ROADMAP.md").write_text(roadmap, encoding="utf-8")
+    # Create .mpm structure
+    mpm_data = project_dir / ".mpm" / "data"
+    mpm_docs = project_dir / ".mpm" / "docs"
+    mpm_data.mkdir(parents=True)
+    mpm_docs.mkdir(parents=True)
+    (mpm_data / "current").mkdir()
+    (mpm_data / "past").mkdir()
+    (mpm_data / "future.json").write_text("[]", encoding="utf-8")
+
+    project_md = f"# {idea['title']}\n\n{idea['description'] or 'TBD'}\n"
+    (mpm_docs / "PROJECT.md").write_text(project_md, encoding="utf-8")
 
     # Remove from ideas
     ideas = [i for i in ideas if i["id"] != idea_id]
     _save_ideas(ideas)
+
+    # Register in config
+    _add_project_to_config(str(project_dir))
 
     # Invalidate project cache
     _cache["data"] = None
@@ -236,145 +274,15 @@ def api_promote_idea(idea_id):
 # ---------------------------------------------------------------------------
 
 def _project_dir(project_name: str):
+    """Resolve project name to directory path from registered projects."""
     if "/" in project_name or ".." in project_name:
         return None
-    d = WORKSPACE_ROOT / project_name
-    return d if d.is_dir() else None
-
-
-# ---------------------------------------------------------------------------
-# Status (current work per project) — .mpm/status.json
-# ---------------------------------------------------------------------------
-
-@app.route("/api/status/<project_name>")
-def api_get_status(project_name):
-    d = _project_dir(project_name)
-    if not d:
-        return jsonify({"error": "Project not found"}), 404
-    return jsonify(load_status(d))
-
-
-@app.route("/api/status/<project_name>", methods=["PUT"])
-def api_put_status(project_name):
-    d = _project_dir(project_name)
-    if not d:
-        return jsonify({"error": "Project not found"}), 404
-    data = request.get_json(force=True)
-    save_status(d, data)
-    _cache["data"] = None
-    return jsonify({"ok": True})
-
-
-# ---------------------------------------------------------------------------
-# Next Tasks (per project task queue) — .mpm/next_tasks.json
-# ---------------------------------------------------------------------------
-
-@app.route("/api/next-tasks/<project_name>")
-def api_get_next_tasks(project_name):
-    d = _project_dir(project_name)
-    if not d:
-        return jsonify({"error": "Project not found"}), 404
-    return jsonify(load_next_tasks(d))
-
-
-@app.route("/api/next-tasks/<project_name>", methods=["POST"])
-def api_add_next_task(project_name):
-    d = _project_dir(project_name)
-    if not d:
-        return jsonify({"error": "Project not found"}), 404
-    data = request.get_json(force=True)
-    tasks = load_next_tasks(d)
-    task = {
-        "id": uuid.uuid4().hex[:12],
-        "contents": data.get("contents", ""),
-    }
-    tasks.append(task)
-    save_next_tasks(d, tasks)
-    _cache["data"] = None
-    return jsonify(task), 201
-
-
-@app.route("/api/next-tasks/<project_name>/<task_id>", methods=["PUT"])
-def api_update_next_task(project_name, task_id):
-    d = _project_dir(project_name)
-    if not d:
-        return jsonify({"error": "Project not found"}), 404
-    data = request.get_json(force=True)
-    tasks = load_next_tasks(d)
-    for t in tasks:
-        if t["id"] == task_id:
-            if "contents" in data:
-                t["contents"] = data["contents"]
-            save_next_tasks(d, tasks)
-            _cache["data"] = None
-            return jsonify(t)
-    return jsonify({"error": "Not found"}), 404
-
-
-@app.route("/api/next-tasks/<project_name>/<task_id>", methods=["DELETE"])
-def api_delete_next_task(project_name, task_id):
-    d = _project_dir(project_name)
-    if not d:
-        return jsonify({"error": "Project not found"}), 404
-    tasks = load_next_tasks(d)
-    tasks = [t for t in tasks if t["id"] != task_id]
-    save_next_tasks(d, tasks)
-    _cache["data"] = None
-    return jsonify({"ok": True})
-
-
-@app.route("/api/next-tasks/<project_name>/reorder", methods=["PUT"])
-def api_reorder_next_tasks(project_name):
-    d = _project_dir(project_name)
-    if not d:
-        return jsonify({"error": "Project not found"}), 404
-    data = request.get_json(force=True)
-    order = data.get("order", [])
-    tasks = load_next_tasks(d)
-    task_map = {t["id"]: t for t in tasks}
-    reordered = [task_map[tid] for tid in order if tid in task_map]
-    seen = set(order)
-    for t in tasks:
-        if t["id"] not in seen:
-            reordered.append(t)
-    save_next_tasks(d, reordered)
-    _cache["data"] = None
-    return jsonify(reordered)
-
-
-# ---------------------------------------------------------------------------
-# History (completed feature units) — .mpm/history.json
-# ---------------------------------------------------------------------------
-
-@app.route("/api/history/<project_name>")
-def api_get_history(project_name):
-    d = _project_dir(project_name)
-    if not d:
-        return jsonify({"error": "Project not found"}), 404
-    return jsonify(load_history(d))
-
-
-@app.route("/api/history/<project_name>", methods=["POST"])
-def api_add_history(project_name):
-    d = _project_dir(project_name)
-    if not d:
-        return jsonify({"error": "Project not found"}), 404
-    data = request.get_json(force=True)
-    history = load_history(d)
-    entry = {
-        "id": uuid.uuid4().hex[:12],
-        "goal": data.get("goal", ""),
-        "approach": data.get("approach", ""),
-        "verification": data.get("verification", ""),
-        "result": data.get("result", ""),
-        "status": data.get("status", "success"),
-        "note": data.get("note", ""),
-        "timestamp": data.get("timestamp", ""),
-    }
-    history.insert(0, entry)  # newest first
-    save_history(d, history)
-    _cache["data"] = None
-    return jsonify(entry), 201
+    config = load_projects_config()
+    for p in config.get("projects", []):
+        if Path(p).name == project_name:
+            d = Path(p)
+            return d if d.is_dir() else None
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -416,31 +324,23 @@ def api_v2_add_future(project_name):
     return jsonify(task), 201
 
 
-@app.route("/api/v2/future/<project_name>/<task_id>", methods=["PUT"])
-def api_v2_update_future(project_name, task_id):
-    d = _project_dir(project_name)
-    if not d:
-        return jsonify({"error": "Project not found"}), 404
-    data = request.get_json(force=True)
-    tasks = load_future(d)
-    for t in tasks:
-        if t["id"] == task_id:
-            for key in ("title", "prompt"):
-                if key in data:
-                    t[key] = data[key]
-            save_future(d, tasks)
-            _cache["data"] = None
-            return jsonify(t)
-    return jsonify({"error": "Not found"}), 404
-
-
-@app.route("/api/v2/future/<project_name>/<task_id>", methods=["DELETE"])
-def api_v2_delete_future(project_name, task_id):
+@app.route("/api/v2/future/<project_name>/<task_id>", methods=["PUT", "DELETE"])
+def api_v2_future_task(project_name, task_id):
     d = _project_dir(project_name)
     if not d:
         return jsonify({"error": "Project not found"}), 404
     tasks = load_future(d)
-    tasks = [t for t in tasks if t["id"] != task_id]
+    if request.method == "DELETE":
+        tasks = [t for t in tasks if t["id"] != task_id]
+    else:
+        data = request.get_json(force=True)
+        for t in tasks:
+            if t["id"] == task_id:
+                if "title" in data:
+                    t["title"] = data["title"]
+                if "prompt" in data:
+                    t["prompt"] = data["prompt"]
+                break
     save_future(d, tasks)
     _cache["data"] = None
     return jsonify({"ok": True})
@@ -509,6 +409,29 @@ def api_v2_get_project_md(project_name):
 
 
 # ---------------------------------------------------------------------------
+# Autonext state
+# ---------------------------------------------------------------------------
+
+@app.route("/api/autonext-state")
+def api_autonext_state():
+    """Return autonext state if active."""
+    config = load_projects_config()
+    for project_path in config.get("projects", []):
+        d = Path(project_path)
+        if not d.is_dir():
+            continue
+        sf = d / ".mpm" / "data" / "autonext-state.json"
+        if sf.exists():
+            try:
+                data = json.loads(sf.read_text())
+                data["project"] = d.name
+                return jsonify(data)
+            except Exception:
+                pass
+    return jsonify(None)
+
+
+# ---------------------------------------------------------------------------
 # Hook receiver — Stop/SessionStart notifications from Claude Code
 # ---------------------------------------------------------------------------
 
@@ -527,22 +450,6 @@ def api_hook_agent_status():
     })
     return jsonify({"ok": True})
 
-
-# Legacy aliases
-@app.route("/api/hook/stop", methods=["POST"])
-def api_hook_stop():
-    data = request.get_json(force=True) if request.is_json else {}
-    data.setdefault("status", "waiting")
-    socketio.emit("agent_status", data)
-    return jsonify({"ok": True})
-
-
-@app.route("/api/hook/session-start", methods=["POST"])
-def api_hook_session_start():
-    data = request.get_json(force=True) if request.is_json else {}
-    data.setdefault("status", "active")
-    socketio.emit("agent_status", data)
-    return jsonify({"ok": True})
 
 
 # ---------------------------------------------------------------------------
@@ -600,10 +507,10 @@ def api_kill_session(project):
 
 
 # ---------------------------------------------------------------------------
-# Saved CLI commands
+# Project registration
 # ---------------------------------------------------------------------------
 
-CLI_CONFIG_PATH = Path(__file__).parent.parent / "data" / "cli_patterns.json"
+CLI_CONFIG_PATH = Path(__file__).parent.parent / "data" / "config.json"
 
 
 def _load_cli_config() -> dict:
@@ -616,19 +523,55 @@ def _save_cli_config(config: dict) -> None:
     )
 
 
+def _add_project_to_config(project_path: str) -> None:
+    config = _load_cli_config()
+    projects = config.get("projects", [])
+    if project_path not in projects:
+        projects.append(project_path)
+        config["projects"] = projects
+        _save_cli_config(config)
+
+
+@app.route("/api/projects/register", methods=["POST"])
+def api_register_project():
+    """Register a project directory."""
+    data = request.get_json(force=True)
+    path = data.get("path", "").strip()
+    if not path or not Path(path).is_dir():
+        return jsonify({"error": "Valid directory path required"}), 400
+    if not (Path(path) / ".mpm").is_dir():
+        return jsonify({"error": "Not an MPM project (missing .mpm/)"}), 400
+    _add_project_to_config(path)
+    _cache["data"] = None
+    return jsonify({"ok": True, "path": path}), 201
+
+
+@app.route("/api/projects/unregister", methods=["POST"])
+def api_unregister_project():
+    """Unregister a project directory (does not delete files)."""
+    data = request.get_json(force=True)
+    path = data.get("path", "").strip()
+    if not path:
+        return jsonify({"error": "path required"}), 400
+    config = _load_cli_config()
+    projects = config.get("projects", [])
+    if path in projects:
+        projects.remove(path)
+        config["projects"] = projects
+        _save_cli_config(config)
+    _cache["data"] = None
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Saved CLI commands
+# ---------------------------------------------------------------------------
+
 @app.route("/api/cli-commands")
 def api_cli_commands():
     config = _load_cli_config()
     return jsonify(config.get("saved_commands", []))
 
-
-@app.route("/api/config")
-def api_config():
-    config = _load_cli_config()
-    return jsonify({
-        "ssh_host": config.get("ssh_host", ""),
-        "tmux_prefix": config.get("tmux_prefix", "mpm"),
-    })
 
 
 @app.route("/api/cli-commands", methods=["POST"])
@@ -644,6 +587,21 @@ def api_add_cli_command():
         config["saved_commands"] = commands
         _save_cli_config(config)
     return jsonify(commands), 201
+
+
+@app.route("/api/cli-commands", methods=["DELETE"])
+def api_delete_cli_command():
+    data = request.get_json(force=True)
+    cmd = data.get("command", "").strip()
+    if not cmd:
+        return jsonify({"error": "command required"}), 400
+    config = _load_cli_config()
+    commands = config.get("saved_commands", [])
+    if cmd in commands:
+        commands.remove(cmd)
+        config["saved_commands"] = commands
+        _save_cli_config(config)
+    return jsonify(commands)
 
 
 # ---------------------------------------------------------------------------
@@ -662,61 +620,6 @@ def api_ttyd_token(project):
         return jsonify(r.json())
     except Exception as e:
         return jsonify({"error": str(e)}), 502
-
-
-# ---------------------------------------------------------------------------
-# WebSocket events
-# ---------------------------------------------------------------------------
-
-@socketio.on("subscribe")
-def ws_subscribe(data):
-    project = data.get("project")
-    if project:
-        output = subscribe(project)
-        emit("terminal_output", {"project": project, "output": output})
-
-
-@socketio.on("unsubscribe")
-def ws_unsubscribe(data):
-    project = data.get("project")
-    if project:
-        unsubscribe(project)
-
-
-@socketio.on("send_input")
-def ws_send_input(data):
-    project = data.get("project")
-    text = data.get("text", "")
-    if project and text:
-        send_keys(project, text)
-
-
-
-
-# Open tmux session in native terminal emulator
-@app.route("/api/sessions/<project>/open-terminal", methods=["POST"])
-def api_open_terminal(project):
-    config = json.loads(CLI_CONFIG_PATH.read_text(encoding="utf-8"))
-    prefix = config.get("tmux_prefix", "mpm")
-    tmux_name = f"{prefix}-{project}"
-
-    # Try common terminal emulators in order
-    terminals = [
-        ["gnome-terminal", "--", "tmux", "attach-session", "-t", tmux_name],
-        ["konsole", "-e", "tmux", "attach-session", "-t", tmux_name],
-        ["xfce4-terminal", "-e", f"tmux attach-session -t {tmux_name}"],
-        ["x-terminal-emulator", "-e", f"tmux attach-session -t {tmux_name}"],
-        ["xterm", "-e", "tmux", "attach-session", "-t", tmux_name],
-    ]
-
-    for cmd in terminals:
-        try:
-            subprocess.Popen(cmd, start_new_session=True)
-            return jsonify({"ok": True, "terminal": cmd[0]})
-        except FileNotFoundError:
-            continue
-
-    return jsonify({"error": "No terminal emulator found", "command": f"tmux attach-session -t {tmux_name}"}), 404
 
 
 if __name__ == "__main__":
@@ -760,6 +663,5 @@ if __name__ == "__main__":
     _signal.signal(_signal.SIGINT, _shutdown)
 
     print(f"MPM Dashboard → http://localhost:{port}")
-    start_polling(socketio)
-    start_file_watcher(socketio)
+    start_file_watcher(socketio, cache=_cache)
     socketio.run(app, host="0.0.0.0", port=port, debug=False, allow_unsafe_werkzeug=True)

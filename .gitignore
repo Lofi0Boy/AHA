@@ -1,3 +1,10 @@
 .venv/
 __pycache__/
 *.pyc
+
+# User data (not for distribution)
+data/ideas.json
+data/config.json
+.mpm/data/current/
+.mpm/data/past/
+data/.server_shutdown_at

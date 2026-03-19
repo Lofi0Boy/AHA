@@ -4,11 +4,11 @@ MPM Task System CLI — manages task transitions.
 
 Usage:
     task.py pop <session_id>              # future → current
+    task.py create <session_id> <title> <prompt>  # → current (direct, skip future)
     task.py complete <session_id> <status> [--memo "..."]  # current → past
     task.py add <title> <prompt>          # → future (append to back)
+    task.py update <session_id> <field> <value>  # update current task field
     task.py status                        # show current state
-    task.py list-future                   # show future queue
-    task.py list-current                  # show active tasks
 """
 
 import json
@@ -67,7 +67,7 @@ def cmd_complete(session_id, status, memo=None, result=None):
         print(f"ERROR: no active task for session {session_id}")
         sys.exit(1)
 
-    valid_statuses = ("success", "postpone", "modified", "discard")
+    valid_statuses = ("success", "fail", "postpone", "modified", "discard")
     if status not in valid_statuses:
         print(f"ERROR: status must be one of {valid_statuses}")
         sys.exit(1)
@@ -110,6 +110,44 @@ def cmd_complete(session_id, status, memo=None, result=None):
         future.append(new_task)
         _save_json(FUTURE_PATH, future)
         print(f"  + new card added to future: {new_task['id']}")
+
+
+def cmd_create(session_id, title, prompt):
+    """Create a task directly in current (skip future queue).
+    If a current task already exists, auto-complete it to past first."""
+    current_path = CURRENT_DIR / f"{session_id}.json"
+    if current_path.exists():
+        existing = _load_json(current_path)
+        existing["status"] = "success"
+        if not existing.get("result"):
+            existing["result"] = "(auto-completed: replaced by new task)"
+        # Move to past
+        date_str = datetime.now(KST).strftime("%y%m%d")
+        past_path = PAST_DIR / f"{date_str}.json"
+        past = _load_json(past_path, [])
+        past.append(existing)
+        _save_json(past_path, past)
+        current_path.unlink()
+        print(f"  → auto-completed previous task: {existing.get('title', '?')}")
+
+    task = {
+        "id": uuid.uuid4().hex[:12],
+        "title": title,
+        "prompt": prompt,
+        "goal": None,
+        "approach": None,
+        "verification": None,
+        "result": None,
+        "memo": None,
+        "status": "active",
+        "created": datetime.now(KST).strftime("%y%m%d%H%M"),
+        "session_id": session_id,
+        "parent_id": None,
+    }
+    _save_json(current_path, task)
+    print(f"OK: created → current/{session_id}.json")
+    print(f"  id: {task['id']}")
+    print(f"  title: {title}")
 
 
 def cmd_add(title, prompt):
@@ -156,6 +194,18 @@ def cmd_status():
     print(f"Past: {total_past} tasks across {len(past_files)} days")
 
 
+def cmd_remove(task_id):
+    """Remove a task from future queue by ID."""
+    future = _load_json(FUTURE_PATH, [])
+    before = len(future)
+    future = [t for t in future if t.get("id") != task_id]
+    if len(future) == before:
+        print(f"ERROR: task {task_id} not found in future queue")
+        sys.exit(1)
+    _save_json(FUTURE_PATH, future)
+    print(f"OK: removed {task_id} from future ({len(future)} remaining)")
+
+
 def cmd_update_field(session_id, field, value):
     """Update a specific field in current task."""
     current_path = CURRENT_DIR / f"{session_id}.json"
@@ -163,7 +213,7 @@ def cmd_update_field(session_id, field, value):
         print(f"ERROR: no active task for session {session_id}")
         sys.exit(1)
 
-    valid_fields = ("goal", "approach", "verification", "result", "memo")
+    valid_fields = ("title", "goal", "approach", "verification", "result", "memo")
     if field not in valid_fields:
         print(f"ERROR: field must be one of {valid_fields}")
         sys.exit(1)
@@ -183,6 +233,8 @@ def main():
 
     if cmd == "pop" and len(sys.argv) >= 3:
         cmd_pop(sys.argv[2])
+    elif cmd == "create" and len(sys.argv) >= 5:
+        cmd_create(sys.argv[2], sys.argv[3], sys.argv[4])
     elif cmd == "complete" and len(sys.argv) >= 4:
         memo = None
         result = None
@@ -201,6 +253,8 @@ def main():
         cmd_add(sys.argv[2], sys.argv[3])
     elif cmd == "status":
         cmd_status()
+    elif cmd == "remove" and len(sys.argv) >= 3:
+        cmd_remove(sys.argv[2])
     elif cmd == "update" and len(sys.argv) >= 5:
         cmd_update_field(sys.argv[2], sys.argv[3], sys.argv[4])
     else:
