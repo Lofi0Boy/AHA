@@ -626,7 +626,11 @@ def api_ttyd_token(project):
 
 
 def start_server():
+    import logging
     import signal as _signal
+
+    # Suppress Flask/Werkzeug dev server warnings
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
     config = load_projects_config()
     port = config.get("port", 5100)

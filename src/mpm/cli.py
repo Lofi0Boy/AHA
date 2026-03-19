@@ -71,13 +71,10 @@ def onboard():
     # Port
     port = click.prompt("Dashboard port", default=config.get("port", 5100), type=int)
 
-    # tmux prefix
-    prefix = click.prompt("tmux session prefix", default=config.get("tmux_prefix", "mpm"))
-
     config.update({
         "timezone": tz,
         "port": port,
-        "tmux_prefix": prefix,
+        "tmux_prefix": config.get("tmux_prefix", "mpm"),
         "patterns": config.get("patterns", ["claude"]),
         "projects": config.get("projects", []),
         "saved_commands": config.get("saved_commands", ["claude"]),
@@ -89,8 +86,9 @@ def onboard():
 
 
 @main.command()
-@click.option("--daemon", "-d", is_flag=True, help="Run in background")
-def dashboard(daemon):
+@click.option("--foreground", "-f", is_flag=True, help="Run in foreground (default is background)")
+@click.option("--no-open", is_flag=True, help="Don't open browser")
+def dashboard(foreground, no_open):
     """Start the MPM dashboard server."""
     config = _load_config()
     if not config:
@@ -98,33 +96,55 @@ def dashboard(daemon):
         return
 
     port = config.get("port", 5100)
+    url = f"http://localhost:{port}"
 
-    if daemon:
-        pid_file = MPM_HOME / "dashboard.pid"
-        if pid_file.exists():
-            pid = int(pid_file.read_text().strip())
-            try:
-                os.kill(pid, 0)
-                click.echo(f"Dashboard already running (PID {pid})")
-                return
-            except OSError:
-                pid_file.unlink()
-
-        proc = subprocess.Popen(
-            [sys.executable, "-m", "mpm.dashboard.server"],
-            start_new_session=True,
-            stdout=open(MPM_HOME / "dashboard.log", "a"),
-            stderr=subprocess.STDOUT,
-        )
-        pid_file.write_text(str(proc.pid))
-        click.echo(f"Dashboard started on http://localhost:{port} (PID {proc.pid})")
-    else:
-        click.echo(f"MPM Dashboard → http://localhost:{port}")
+    if foreground:
+        click.echo(f"MPM Dashboard → {url}")
         click.echo("Press Ctrl+C to stop.\n")
+        if not no_open:
+            _open_browser(url)
         try:
             subprocess.run([sys.executable, "-m", "mpm.dashboard.server"], check=True)
         except KeyboardInterrupt:
             click.echo("\nDashboard stopped.")
+        return
+
+    # Background (default)
+    pid_file = MPM_HOME / "dashboard.pid"
+    if pid_file.exists():
+        pid = int(pid_file.read_text().strip())
+        try:
+            os.kill(pid, 0)
+            click.echo(f"Dashboard already running (PID {pid}) → {url}")
+            if not no_open:
+                _open_browser(url)
+            return
+        except OSError:
+            pid_file.unlink()
+
+    log_file = MPM_HOME / "dashboard.log"
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "mpm.dashboard.server"],
+        start_new_session=True,
+        stdout=open(log_file, "a"),
+        stderr=subprocess.STDOUT,
+    )
+    pid_file.write_text(str(proc.pid))
+    click.echo(f"MPM Dashboard → {url} (PID {proc.pid})")
+    click.echo(f"Logs: {log_file}")
+
+    if not no_open:
+        import time
+        time.sleep(2)  # Wait for server to start
+        _open_browser(url)
+
+
+def _open_browser(url):
+    import webbrowser
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
 
 
 @main.command()
