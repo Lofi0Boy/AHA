@@ -257,11 +257,6 @@
     }
     .card:last-child { margin-bottom: 0; }
 
-    /* Current session */
-    .card.current {
-      border: 1.5px solid #666;
-    }
-
     /* Handoff cards are clickable */
     .card.handoff { cursor: pointer; }
     .card.handoff:hover { border-color: #bbb; }
@@ -608,6 +603,301 @@
       border-radius: 6px;
     }
 
+    /* ---- Current task card ---- */
+    .current-task-card {
+      border: 2px solid transparent;
+    }
+    .current-task-card.task-working {
+      border-color: #1565c0;
+      animation: border-pulse-blue 2s ease-in-out infinite;
+    }
+    .current-task-card.task-waiting {
+      border-color: #e65100;
+      animation: border-pulse-orange 1.5s ease-in-out infinite;
+    }
+    @keyframes border-pulse-blue {
+      0%, 100% { border-color: #1565c0; }
+      50% { border-color: #90caf9; }
+    }
+    @keyframes border-pulse-orange {
+      0%, 100% { border-color: #e65100; }
+      50% { border-color: #ffcc80; }
+    }
+    .ct-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 12px 0;
+    }
+    .ct-title {
+      flex: 1;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ct-stop-btn {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      border: none;
+      border-radius: 3px;
+      background: none;
+      color: var(--muted);
+      font-size: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .ct-stop-btn:hover { color: var(--text); background: var(--border); }
+    .ct-goal {
+      font-size: 12px;
+      color: var(--text);
+      font-weight: 500;
+      padding: 6px 12px 0;
+    }
+    .ct-verification {
+      font-size: 10px;
+      color: var(--secondary);
+      border-top: 1px solid var(--border);
+      padding: 6px 12px 10px;
+      margin: 6px 0 0;
+    }
+    .ct-verification::before {
+      content: 'Verification: ';
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    /* ---- Status card (current work) ---- */
+    .status-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 3px;
+      line-height: 1.4;
+    }
+    .status-badge.s-working  { background: #e3f2fd; color: #1565c0; }
+    .status-badge.s-active   { background: #e3f2fd; color: #1565c0; }
+    .status-badge.s-success  { background: #e8f5e9; color: #2e7d32; }
+    .status-badge.s-failed   { background: #fce4ec; color: #c62828; }
+    .status-badge.s-discard  { background: #fce4ec; color: #c62828; }
+    .status-badge.s-waiting  { background: #fff3e0; color: #e65100; }
+    .status-badge.s-postpone { background: #fff3e0; color: #e65100; }
+    .status-badge.s-modified { background: #f3e5f5; color: #7b1fa2; }
+    .status-badge.s-partial  { background: #fff3e0; color: #e65100; }
+    .status-badge.s-queued   { background: #f5f5f5; color: #888; }
+
+    .status-goal {
+      font-size: 11px;
+      color: var(--text);
+      line-height: 1.5;
+      margin-top: 6px;
+    }
+    .status-approach {
+      font-size: 11px;
+      color: var(--secondary);
+      line-height: 1.4;
+      margin-top: 4px;
+    }
+    .status-verification {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+      font-style: italic;
+    }
+
+    /* ---- Feature card (handoff narrative) ---- */
+    .fc-row {
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .fc-row:last-child { border-bottom: none; }
+    .fc-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .fc-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text);
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .fc-detail {
+      display: none;
+      padding: 6px 0 2px 0;
+    }
+    .fc-row.fc-open .fc-detail { display: block; }
+    .fc-field {
+      font-size: 10px;
+      color: var(--secondary);
+      line-height: 1.5;
+      margin-bottom: 3px;
+    }
+    .fc-field-label {
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 9px;
+    }
+
+    /* ---- Next task cards ---- */
+    .card.nt-card {
+      min-height: auto;
+      border-style: dashed;
+      border-color: #ccc;
+    }
+    .nt-card-inner {
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .nt-card-text {
+      flex: 1;
+      font-size: 11px;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .nt-del-btn {
+      font-size: 12px;
+      color: var(--muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0 2px;
+      opacity: 0;
+      transition: opacity 0.15s;
+      line-height: 1;
+    }
+    .nt-card:hover .nt-del-btn { opacity: 1; }
+    .nt-del-btn:hover { color: #c62828; }
+    .nt-add-card {
+      position: relative;
+      z-index: 1;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .nt-add-card-btn {
+      font-size: 11px;
+      color: var(--muted);
+      background: none;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 6px 12px;
+      cursor: pointer;
+      width: 100%;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .nt-add-card-btn:hover { color: var(--text); border-color: #aaa; }
+    .nt-add-form {
+      display: flex;
+      gap: 4px;
+    }
+    .nt-add-input {
+      flex: 1;
+      font-size: 11px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      outline: none;
+      font-family: inherit;
+      background: var(--surface);
+    }
+    .nt-add-input:focus { border-color: #aaa; }
+    .nt-card-detail {
+      display: none;
+      padding: 0 12px 8px;
+      font-size: 11px;
+      color: var(--secondary);
+      white-space: pre-wrap;
+      line-height: 1.5;
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
+      padding-top: 6px;
+    }
+    .nt-card.expanded .nt-card-detail { display: block; }
+
+    /* ---- History cards ---- */
+    .card.history-card { cursor: pointer; }
+    .card.history-card:hover { border-color: #bbb; }
+    .card.history-card.expanded {
+      border-color: #999;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+    .history-head {
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .history-goal {
+      flex: 1;
+      font-size: 11px;
+      font-weight: 500;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .history-ts {
+      font-size: 10px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .history-body {
+      display: none;
+      padding: 0 12px 10px;
+      border-top: 1px solid var(--border);
+    }
+    .card.history-card.expanded .history-body { display: block; }
+    .history-field {
+      font-size: 11px;
+      color: var(--secondary);
+      line-height: 1.5;
+      margin-top: 6px;
+    }
+    .history-field-label {
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 9px;
+    }
+    .history-note {
+      font-size: 11px;
+      color: var(--secondary);
+      font-style: italic;
+      margin-top: 6px;
+    }
+
+    /* ---- Project description ---- */
+    .col-desc {
+      font-size: 10px;
+      color: var(--secondary);
+      margin-top: 2px;
+      margin-bottom: 4px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      line-height: 1.4;
+    }
+
     /* ---- Terminal active project dimming ---- */
     #board-wrapper.term-dimmed::after {
       content: '';
@@ -679,6 +969,10 @@
       border-radius: 3px;
     }
     .term-card-action:hover { color: var(--text); background: rgba(0,0,0,0.06); }
+    .term-card-status {
+      padding: 8px 12px 10px;
+      border-top: 1px solid var(--border);
+    }
 
     /* ---- Terminal panel ---- */
     #terminal-panel {
@@ -1066,49 +1360,208 @@
   }
 
   // ---- Render project columns ----
-  function renderCurrentCard(p) {
-    const commits = p.unhandoffed_commits || [];
-    let inner;
-    if (commits.length > 0) {
-      const rows = commits.map(c =>
-        `<div class="cp-row"><span class="cp-num">${esc(c.hash)}</span><span class="cp-msg">${esc(c.summary)}</span></div>`
-      ).join('');
-      inner = `<div class="session-commits"><div class="session-label">Since last handoff</div>${rows}</div>`;
-    } else {
-      inner = `<div class="session-empty">No commits since last handoff.</div>`;
+  function renderSessionCard(p) {
+    const tasks = p.current_tasks || [];
+    const t = tasks[0];
+
+    if (!t) {
+      // No active task — show idle card with play button
+      return `<div class="card term-card s-off" data-term-project="${esc(p.name)}"
+        onclick="onTermCardClick(event, '${esc(p.name)}', this)">
+        <div class="term-card-inner">
+          <span class="status-dot off" data-status-project="${esc(p.name)}"></span>
+          <span class="term-card-label">Terminal</span>
+          <span class="term-card-action" data-term-action="${esc(p.name)}">\u25b6</span>
+        </div>
+      </div>`;
     }
-    return `<div class="card current">${inner}</div>`;
+
+    // Active task — show current task card with stop button
+    // Border: blue pulse = Claude working, orange pulse = waiting for user
+    const waiting = !!t.result;
+    const stateClass = waiting ? 'task-waiting' : 'task-working';
+    return `<div class="card current-task-card ${stateClass}" data-term-project="${esc(p.name)}"
+      onclick="onTermCardClick(event, '${esc(p.name)}', this)">
+      <div class="ct-header">
+        <span class="ct-title">${esc(t.title || 'Working...')}</span>
+        <button class="ct-stop-btn" onclick="event.stopPropagation(); onTermStopClick('${esc(p.name)}')" title="Stop">\u25a0</button>
+      </div>
+      ${t.goal ? `<div class="ct-goal">${esc(t.goal)}</div>` : ''}
+      ${t.verification ? `<div class="ct-verification">${esc(t.verification)}</div>` : ''}
+    </div>`;
+  }
+
+  function fmtTimestamp(ts) {
+    if (!ts || ts.length < 10) return ts || '';
+    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const m = parseInt(ts.slice(2,4),10) - 1;
+    const d = parseInt(ts.slice(4,6),10);
+    return `${mo[m]} ${d} \u00b7 ${ts.slice(6,8)}:${ts.slice(8,10)}`;
+  }
+
+  function renderHistoryCard(entry) {
+    const statusClass = entry.status ? `s-${entry.status}` : '';
+    const badge = entry.status
+      ? `<span class="status-badge ${statusClass}">${esc(entry.status)}</span>`
+      : '';
+    // v2: title + created, legacy: goal + timestamp
+    const heading = entry.title || entry.goal || '';
+    const ts = entry.created || entry.timestamp || '';
+    return `<div class="card history-card" onclick="this.classList.toggle('expanded'); requestAnimationFrame(fixStreamlines);">
+      <div class="history-head">
+        <span class="history-goal">${esc(heading)}</span>
+        ${badge}
+        <span class="history-ts">${fmtTimestamp(ts)}</span>
+      </div>
+      <div class="history-body">
+        ${entry.goal ? `<div class="history-field"><span class="history-field-label">Goal</span> ${esc(entry.goal)}</div>` : ''}
+        ${entry.approach ? `<div class="history-field"><span class="history-field-label">Approach</span> ${esc(entry.approach)}</div>` : ''}
+        ${entry.verification ? `<div class="history-field"><span class="history-field-label">Verification</span> ${esc(entry.verification)}</div>` : ''}
+        ${entry.result ? `<div class="history-field"><span class="history-field-label">Result</span> ${esc(entry.result)}</div>` : ''}
+        ${(entry.memo || entry.note) ? `<div class="history-note">${esc(entry.memo || entry.note)}</div>` : ''}
+      </div>
+    </div>`;
   }
 
   function renderHandoffCard(h) {
-    const previewRows = h.commits.map(c =>
-      `<div class="cp-row"><span class="cp-num">#${c.number}</span><span class="cp-msg">${esc(c.summary)}</span></div>`
-    ).join('');
+    const fcs = h.feature_cards || [];
+    const hasFeatureCards = fcs.length > 0;
 
-    const detailEntries = h.commits.map(c =>
-      `<div class="commit-entry">
-        <span class="num">#${c.number}</span><span class="msg">${esc(c.summary)}</span>
-        ${c.details ? `<div class="det">${esc(c.details)}</div>` : ''}
-      </div>`
-    ).join('');
+    let previewHtml = '';
+    let bodyHtml = '';
+
+    if (hasFeatureCards) {
+      // Feature card preview: title + result badge
+      previewHtml = `<div class="commit-preview">${fcs.map(fc => {
+        const badge = fc.result_status
+          ? `<span class="status-badge s-${fc.result_status}">${esc(fc.result_status)}</span>`
+          : '';
+        return `<div class="cp-row"><span class="cp-msg" style="font-weight:500">${esc(fc.title)}</span>${badge}</div>`;
+      }).join('')}</div>`;
+
+      // Feature card expanded body
+      const fcDetails = fcs.map(fc => {
+        const badge = fc.result_status
+          ? `<span class="status-badge s-${fc.result_status}">${esc(fc.result_status)}</span>`
+          : '';
+        return `<div class="fc-row">
+          <div class="fc-header" onclick="this.parentElement.classList.toggle('fc-open')">
+            <span class="fc-title">${esc(fc.title)}</span>${badge}
+          </div>
+          <div class="fc-detail">
+            ${fc.goal ? `<div class="fc-field"><span class="fc-field-label">Goal</span> ${esc(fc.goal)}</div>` : ''}
+            ${fc.approach ? `<div class="fc-field"><span class="fc-field-label">Approach</span> ${esc(fc.approach)}</div>` : ''}
+            ${fc.result ? `<div class="fc-field"><span class="fc-field-label">Result</span> ${esc(fc.result)}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+      bodyHtml = fcDetails;
+    } else {
+      // Legacy commit-based rendering
+      previewHtml = h.commits.length > 0 ? `<div class="commit-preview">${h.commits.map(c =>
+        `<div class="cp-row"><span class="cp-num">#${c.number}</span><span class="cp-msg">${esc(c.summary)}</span></div>`
+      ).join('')}</div>` : '';
+
+      const detailEntries = h.commits.map(c =>
+        `<div class="commit-entry">
+          <span class="num">#${c.number}</span><span class="msg">${esc(c.summary)}</span>
+          ${c.details ? `<div class="det">${esc(c.details)}</div>` : ''}
+        </div>`
+      ).join('');
+      bodyHtml = detailEntries ? `<div class="commits-detail">${detailEntries}</div>` : '';
+    }
 
     const nextRows = (h.next_tasks||[]).map(t =>
       `<div class="next-row">${esc(t)}</div>`
     ).join('');
-
-    const body = [
-      detailEntries ? `<div class="commits-detail">${detailEntries}</div>` : '',
-      nextRows ? `<hr class="card-divider"><div class="next-section"><div class="next-label">Next</div>${nextRows}</div>` : '',
-    ].filter(Boolean).join('');
+    if (nextRows) {
+      bodyHtml += `<hr class="card-divider"><div class="next-section"><div class="next-label">Next</div>${nextRows}</div>`;
+    }
 
     return `
       <div class="card handoff">
         <div class="card-head">
           <div class="card-date">${fmtDate(h.filename)}</div>
         </div>
-        ${previewRows ? `<div class="commit-preview">${previewRows}</div>` : ''}
-        <div class="card-body">${body || '<span style="color:#ccc;font-size:11px">No details.</span>'}</div>
+        ${previewHtml}
+        <div class="card-body">${bodyHtml || '<span style="color:#ccc;font-size:11px">No details.</span>'}</div>
       </div>`;
+  }
+
+  function ntFirstLine(contents) {
+    return (contents || '').split('\n')[0] || '';
+  }
+
+  function renderNextTasks(p) {
+    const tasks = p.future_tasks || p.next_tasks || [];
+    const cards = tasks.map(t => {
+      // v2: title + prompt, legacy: contents
+      const title = t.title || ntFirstLine(t.contents);
+      const detail = t.prompt || (t.contents && t.contents.includes('\n') ? t.contents : '');
+      const hasDetail = !!detail && detail !== title;
+      return `<div class="card nt-card" onclick="event.stopPropagation(); toggleNtCard(this)">
+        <div class="nt-card-inner">
+          <span class="nt-card-text">${esc(title)}</span>
+          <button class="nt-del-btn" onclick="event.stopPropagation(); deleteFutureTask('${esc(p.name)}', '${esc(t.id)}')" title="Remove">&times;</button>
+        </div>
+        ${hasDetail ? `<div class="nt-card-detail">${esc(detail)}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    const addCard = `<div class="nt-add-card" onclick="event.stopPropagation()">
+      <div class="nt-add-form" style="display:none" data-nt-project="${esc(p.name)}">
+        <input class="nt-add-title" placeholder="Title" style="width:100%;margin-bottom:4px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;" />
+        <textarea class="nt-add-input" rows="2" placeholder="Prompt (detailed instruction)..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitFutureTask(this)}"></textarea>
+      </div>
+      <button class="nt-add-card-btn" onclick="toggleNtForm(this)">+ Add task</button>
+    </div>`;
+
+    return addCard + cards;
+  }
+
+  function toggleNtCard(el) {
+    el.classList.toggle('expanded');
+  }
+
+  async function submitFutureTask(inputEl) {
+    const form = inputEl.closest('.nt-add-form');
+    const project = form.dataset.ntProject;
+    const titleInput = form.querySelector('.nt-add-title');
+    const title = titleInput ? titleInput.value.trim() : '';
+    const prompt = inputEl.value.trim();
+    if (!title && !prompt) return;
+    if (titleInput) titleInput.value = '';
+    inputEl.value = '';
+    try {
+      await fetch(`/api/v2/future/${encodeURIComponent(project)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title || prompt.split('\n')[0], prompt }),
+      });
+      load();
+    } catch(e) { /* silent */ }
+  }
+
+  async function deleteFutureTask(project, taskId) {
+    try {
+      await fetch(`/api/v2/future/${encodeURIComponent(project)}/${taskId}`, { method: 'DELETE' });
+      load();
+    } catch(e) { /* silent */ }
+  }
+
+  // Legacy compat
+  async function submitNextTask(inputEl) { submitFutureTask(inputEl); }
+  async function deleteNextTask(project, taskId) { deleteFutureTask(project, taskId); }
+
+  function toggleNtForm(btn) {
+    const form = btn.closest('.nt-add-card').querySelector('.nt-add-form');
+    const showing = form.style.display !== 'none';
+    form.style.display = showing ? 'none' : 'flex';
+    btn.style.display = showing ? '' : 'none';
+    if (!showing) {
+      const inp = form.querySelector('.nt-add-input');
+      if (inp) setTimeout(() => inp.focus(), 50);
+    }
   }
 
   function renderCol(p) {
@@ -1120,6 +1573,10 @@
     const taskRows = pendingItems.length > 0
       ? pendingItems.map(i => `<div class="task-row">${esc(shortTask(i.text))}</div>`).join('')
       : `<div class="tasks-empty">Nothing left this phase.</div>`;
+
+    const descLine = p.description
+      ? `<div class="col-desc" title="${esc(p.description)}">${esc(p.description)}</div>`
+      : '';
 
     const label = `
       <div class="col-label" data-project="${esc(p.name)}"
@@ -1136,6 +1593,7 @@
             </svg>
           </button>
         </div>
+        ${descLine}
         ${cp ? `
           <div class="col-phase">Phase ${cp.number}: ${esc(cp.name)} \u00b7 ${cp.done_count}/${cp.total_count}</div>
           <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
@@ -1146,16 +1604,17 @@
         ` : ''}
       </div>`;
 
-    const validHandoffs = (p.handoffs||[]).filter(h => h.commits.length > 0 || h.next_tasks.length > 0);
-    const termCard = `<div class="card term-card s-off" data-term-project="${esc(p.name)}"
-      onclick="onTermCardClick(event, '${esc(p.name)}', this)">
-      <div class="term-card-inner">
-        <span class="status-dot off" data-status-project="${esc(p.name)}"></span>
-        <span class="term-card-label">Terminal</span>
-        <span class="term-card-action" data-term-action="${esc(p.name)}">\u25b6</span>
-      </div>
-    </div>`;
-    const cards = [termCard, renderCurrentCard(p), ...validHandoffs.map(renderHandoffCard)].join('');
+    const validHandoffs = (p.handoffs||[]).filter(h =>
+      h.commits.length > 0 || h.next_tasks.length > 0
+    );
+    const historyCards = (p.past_tasks || p.history || []).map(renderHistoryCard);
+    const sessionCard = renderSessionCard(p);
+    const cards = [
+      renderNextTasks(p),
+      sessionCard,
+      ...historyCards,
+      ...validHandoffs.map(renderHandoffCard),
+    ].join('');
 
     return `<div class="col" data-project="${esc(p.name)}">${label}<div class="stream">${cards}</div></div>`;
   }
@@ -1898,6 +2357,13 @@
     openTerminal(project, el);
   }
 
+  function onTermStopClick(project) {
+    const session = sessionsData.find(s => s.project === project);
+    if (session && session.state !== 'off') {
+      killSession(project);
+    }
+  }
+
   // ---- Terminal panel resize + mode toggle ----
   let termMode = localStorage.getItem('termMode') || 'bottom';
 
@@ -2086,8 +2552,9 @@
       const state = session ? session.state : 'off';
       dot.className = `status-dot ${state}`;
     });
-    // Update terminal card borders and labels
+    // Update terminal card borders and labels (skip current-task-cards)
     document.querySelectorAll('[data-term-project]').forEach(card => {
+      if (card.classList.contains('current-task-card')) return;
       const project = card.dataset.termProject;
       const session = sessionsData.find(s => s.project === project);
       const state = session ? session.state : 'off';
@@ -2125,6 +2592,20 @@
   // ---- File change detection (inotify via server) ----
   socket.on('projects_changed', () => {
     load();
+  });
+
+  // ---- Agent status updates from hooks ----
+  socket.on('agent_status', (data) => {
+    const status = data.status;
+    const project = data.project;
+    const selector = project
+      ? `.col[data-project="${project}"] .current-task-card`
+      : '.current-task-card';
+    document.querySelectorAll(selector).forEach(card => {
+      card.classList.remove('task-working', 'task-waiting');
+      if (status === 'working') card.classList.add('task-working');
+      else if (status === 'waiting') card.classList.add('task-waiting');
+    });
   });
 
   // ---- Init ----

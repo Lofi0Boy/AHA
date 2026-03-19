@@ -1,0 +1,30 @@
+[
+  {
+    "id": "review_system_files",
+    "title": "태스크 시스템 v2 파일 검토",
+    "prompt": "생성된 모든 시스템 파일 검토 받기: .mpm/ 구조, .claude/rules, .claude/skills, .claude/settings.json hooks, projects.py, server.py API 엔드포인트.",
+    "goal": "유저가 시스템 파일들이 설계 문서(docs/design/task-system-v2.md)와 일치하는지 확인.",
+    "approach": "생성된 파일들을 유저에게 제시하고 피드백 반영.",
+    "verification": "유저가 승인하거나, 요청된 변경사항이 모두 적용됨.",
+    "result": "유저가 검토 완료, 태스크 내용 한국어로 수정 반영. 승인됨.",
+    "memo": null,
+    "status": "success",
+    "created": "2603191500",
+    "session_id": "session_2603191500",
+    "parent_id": null
+  },
+  {
+    "id": "ui_task_card",
+    "title": "프로젝트 컬럼에 현재 태스크 카드 표시",
+    "prompt": "각 프로젝트 컬럼에 현재 진행 중인 태스크를 카드로 표시. title, goal, approach, verification, status를 보여주고, 활성 태스크가 없으면 'No active task' 표시. /api/v2/current/<project> 엔드포인트에서 읽어옴.",
+    "goal": "대시보드 프로젝트 컬럼에 현재 진행 중인 태스크를 시각적으로 명확하게 표시",
+    "approach": "index.html의 기존 status 카드 영역을 v2 태스크 카드로 교체. /api/projects 응답의 current_tasks 데이터 활용. 태스크 필드별 섹션 구성.",
+    "verification": "1) 대시보드에서 current 태스크가 카드로 보임 2) title, goal, status 등 필드가 표시됨 3) 태스크 없을 때 빈 상태 표시",
+    "result": "current task 카드: terminal 카드 위치에 통합 (idle=재생버튼, active=태스크카드+중지버튼). goal+verification 표시. 보더 상태(working=파랑펄스, waiting=주황펄스) WebSocket으로 실시간 전환. Stop/UserPromptSubmit hook → HTTP → WebSocket 파이프라인 완성. updateStatusDots가 current-task-card 클래스를 덮어쓰는 버그 수정.",
+    "memo": "past/future 카드 UI 다듬기는 다음 태스크로 분리",
+    "status": "success",
+    "created": "2603191500",
+    "session_id": "session_2603191500",
+    "parent_id": null
+  }
+]

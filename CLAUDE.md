@@ -15,3 +15,27 @@
 - 데몬은 절대 에러를 조용히 삼키면 안 됩니다 — 실패가 명확히 보이도록 에러를 눈에 띄게 표시하세요.
 - 상태는 모든 변경 시 디스크에 저장되어야 합니다 (충돌 복구).
 - 모든 서브 에이전트 통신은 비동기입니다 — 블로킹 대기를 하지 마세요.
+
+---
+
+## Task System (v2)
+
+Task rules are defined in `.claude/rules/mpm-workflow.md` (auto-loaded by Claude Code).
+
+Data location: `.mpm/data/` in each project directory.
+
+```
+.mpm/
+├── docs/
+│   └── PROJECT.md          # Project identity + roadmap
+└── data/
+    ├── future.json          # Queued tasks (front = highest priority)
+    ├── current/             # Active tasks (one per session)
+    │   └── {session_id}.json
+    └── past/
+        └── YYMMDD.json      # Completed/postponed/discarded tasks
+```
+
+Available skills:
+- `/mpm-next` — Pick up next task from queue
+- `/mpm-init-project` — Auto-generate PROJECT.md via project scan + user interview

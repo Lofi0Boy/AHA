@@ -33,7 +33,17 @@ from gateway.session_manager import (
     reconnect_ttyd,
     send_keys,
 )
-from projects import WORKSPACE_ROOT, get_all_projects
+from projects import (
+    WORKSPACE_ROOT, get_all_projects,
+    load_future, save_future,
+    load_current_tasks, save_current_task, delete_current_task,
+    load_past, append_past,
+    load_project_md,
+    # Legacy compat
+    load_status, save_status,
+    load_next_tasks, save_next_tasks,
+    load_history, save_history,
+)
 
 IDEAS_PATH = Path(__file__).parent.parent / "data" / "ideas.json"
 
@@ -219,6 +229,320 @@ def api_promote_idea(idea_id):
     _cache["data"] = None
 
     return jsonify({"ok": True, "project": project_name})
+
+
+# ---------------------------------------------------------------------------
+# Helper: resolve project directory (validates name)
+# ---------------------------------------------------------------------------
+
+def _project_dir(project_name: str):
+    if "/" in project_name or ".." in project_name:
+        return None
+    d = WORKSPACE_ROOT / project_name
+    return d if d.is_dir() else None
+
+
+# ---------------------------------------------------------------------------
+# Status (current work per project) — .mpm/status.json
+# ---------------------------------------------------------------------------
+
+@app.route("/api/status/<project_name>")
+def api_get_status(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    return jsonify(load_status(d))
+
+
+@app.route("/api/status/<project_name>", methods=["PUT"])
+def api_put_status(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    data = request.get_json(force=True)
+    save_status(d, data)
+    _cache["data"] = None
+    return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Next Tasks (per project task queue) — .mpm/next_tasks.json
+# ---------------------------------------------------------------------------
+
+@app.route("/api/next-tasks/<project_name>")
+def api_get_next_tasks(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    return jsonify(load_next_tasks(d))
+
+
+@app.route("/api/next-tasks/<project_name>", methods=["POST"])
+def api_add_next_task(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    data = request.get_json(force=True)
+    tasks = load_next_tasks(d)
+    task = {
+        "id": uuid.uuid4().hex[:12],
+        "contents": data.get("contents", ""),
+    }
+    tasks.append(task)
+    save_next_tasks(d, tasks)
+    _cache["data"] = None
+    return jsonify(task), 201
+
+
+@app.route("/api/next-tasks/<project_name>/<task_id>", methods=["PUT"])
+def api_update_next_task(project_name, task_id):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    data = request.get_json(force=True)
+    tasks = load_next_tasks(d)
+    for t in tasks:
+        if t["id"] == task_id:
+            if "contents" in data:
+                t["contents"] = data["contents"]
+            save_next_tasks(d, tasks)
+            _cache["data"] = None
+            return jsonify(t)
+    return jsonify({"error": "Not found"}), 404
+
+
+@app.route("/api/next-tasks/<project_name>/<task_id>", methods=["DELETE"])
+def api_delete_next_task(project_name, task_id):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    tasks = load_next_tasks(d)
+    tasks = [t for t in tasks if t["id"] != task_id]
+    save_next_tasks(d, tasks)
+    _cache["data"] = None
+    return jsonify({"ok": True})
+
+
+@app.route("/api/next-tasks/<project_name>/reorder", methods=["PUT"])
+def api_reorder_next_tasks(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    data = request.get_json(force=True)
+    order = data.get("order", [])
+    tasks = load_next_tasks(d)
+    task_map = {t["id"]: t for t in tasks}
+    reordered = [task_map[tid] for tid in order if tid in task_map]
+    seen = set(order)
+    for t in tasks:
+        if t["id"] not in seen:
+            reordered.append(t)
+    save_next_tasks(d, reordered)
+    _cache["data"] = None
+    return jsonify(reordered)
+
+
+# ---------------------------------------------------------------------------
+# History (completed feature units) — .mpm/history.json
+# ---------------------------------------------------------------------------
+
+@app.route("/api/history/<project_name>")
+def api_get_history(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    return jsonify(load_history(d))
+
+
+@app.route("/api/history/<project_name>", methods=["POST"])
+def api_add_history(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    data = request.get_json(force=True)
+    history = load_history(d)
+    entry = {
+        "id": uuid.uuid4().hex[:12],
+        "goal": data.get("goal", ""),
+        "approach": data.get("approach", ""),
+        "verification": data.get("verification", ""),
+        "result": data.get("result", ""),
+        "status": data.get("status", "success"),
+        "note": data.get("note", ""),
+        "timestamp": data.get("timestamp", ""),
+    }
+    history.insert(0, entry)  # newest first
+    save_history(d, history)
+    _cache["data"] = None
+    return jsonify(entry), 201
+
+
+# ---------------------------------------------------------------------------
+# Task System v2 — future / current / past
+# ---------------------------------------------------------------------------
+
+@app.route("/api/v2/future/<project_name>")
+def api_v2_get_future(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    return jsonify(load_future(d))
+
+
+@app.route("/api/v2/future/<project_name>", methods=["POST"])
+def api_v2_add_future(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    data = request.get_json(force=True)
+    tasks = load_future(d)
+    task = {
+        "id": uuid.uuid4().hex[:12],
+        "title": data.get("title", ""),
+        "prompt": data.get("prompt", ""),
+        "goal": None,
+        "approach": None,
+        "verification": None,
+        "result": None,
+        "memo": None,
+        "status": "queued",
+        "created": datetime.now(timezone.utc).strftime("%y%m%d%H%M"),
+        "session_id": None,
+        "parent_id": data.get("parent_id"),
+    }
+    tasks.append(task)  # append to back (lowest priority)
+    save_future(d, tasks)
+    _cache["data"] = None
+    return jsonify(task), 201
+
+
+@app.route("/api/v2/future/<project_name>/<task_id>", methods=["PUT"])
+def api_v2_update_future(project_name, task_id):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    data = request.get_json(force=True)
+    tasks = load_future(d)
+    for t in tasks:
+        if t["id"] == task_id:
+            for key in ("title", "prompt"):
+                if key in data:
+                    t[key] = data[key]
+            save_future(d, tasks)
+            _cache["data"] = None
+            return jsonify(t)
+    return jsonify({"error": "Not found"}), 404
+
+
+@app.route("/api/v2/future/<project_name>/<task_id>", methods=["DELETE"])
+def api_v2_delete_future(project_name, task_id):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    tasks = load_future(d)
+    tasks = [t for t in tasks if t["id"] != task_id]
+    save_future(d, tasks)
+    _cache["data"] = None
+    return jsonify({"ok": True})
+
+
+@app.route("/api/v2/future/<project_name>/reorder", methods=["PUT"])
+def api_v2_reorder_future(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    data = request.get_json(force=True)
+    order = data.get("order", [])
+    tasks = load_future(d)
+    task_map = {t["id"]: t for t in tasks}
+    reordered = [task_map[tid] for tid in order if tid in task_map]
+    seen = set(order)
+    for t in tasks:
+        if t["id"] not in seen:
+            reordered.append(t)
+    save_future(d, reordered)
+    _cache["data"] = None
+    return jsonify(reordered)
+
+
+@app.route("/api/v2/current/<project_name>")
+def api_v2_get_current(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    return jsonify(load_current_tasks(d))
+
+
+@app.route("/api/v2/past/<project_name>")
+def api_v2_get_past(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    date_str = request.args.get("date")
+    return jsonify(load_past(d, date_str))
+
+
+@app.route("/api/v2/past/<project_name>", methods=["POST"])
+def api_v2_add_past(project_name):
+    """Move a completed task to past."""
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    data = request.get_json(force=True)
+    append_past(d, data)
+    # Clean up current if session_id provided
+    session_id = data.get("session_id")
+    if session_id:
+        delete_current_task(d, session_id)
+    _cache["data"] = None
+    return jsonify({"ok": True}), 201
+
+
+@app.route("/api/v2/project-md/<project_name>")
+def api_v2_get_project_md(project_name):
+    d = _project_dir(project_name)
+    if not d:
+        return jsonify({"error": "Project not found"}), 404
+    raw = load_project_md(d)
+    html = md_lib.markdown(raw, extensions=["tables", "fenced_code"]) if raw else ""
+    return jsonify({"raw": raw, "html": html})
+
+
+# ---------------------------------------------------------------------------
+# Hook receiver — Stop/SessionStart notifications from Claude Code
+# ---------------------------------------------------------------------------
+
+@app.route("/api/hook/agent-status", methods=["POST"])
+def api_hook_agent_status():
+    """Receive agent status updates from Claude Code hooks.
+
+    status: "active" | "working" | "waiting" | "offline"
+    """
+    data = request.get_json(force=True) if request.is_json else {}
+    status = data.get("status", "unknown")
+    project = data.get("project")
+    socketio.emit("agent_status", {
+        "project": project,
+        "status": status,
+    })
+    return jsonify({"ok": True})
+
+
+# Legacy aliases
+@app.route("/api/hook/stop", methods=["POST"])
+def api_hook_stop():
+    data = request.get_json(force=True) if request.is_json else {}
+    data.setdefault("status", "waiting")
+    socketio.emit("agent_status", data)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/hook/session-start", methods=["POST"])
+def api_hook_session_start():
+    data = request.get_json(force=True) if request.is_json else {}
+    data.setdefault("status", "active")
+    socketio.emit("agent_status", data)
+    return jsonify({"ok": True})
 
 
 # ---------------------------------------------------------------------------

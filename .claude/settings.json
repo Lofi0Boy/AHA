@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "__mpm__",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".mpm/scripts/hook-notify.sh active"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "__mpm__",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".mpm/scripts/hook-notify.sh working"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "__mpm__",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".mpm/scripts/hook-notify.sh waiting"
+          }
+        ]
+      }
+    ]
+  }
+}

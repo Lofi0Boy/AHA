@@ -1,0 +1,29 @@
+---
+name: mpm-next
+description: Pick up the next task from the future queue and start working on it.
+disable-model-invocation: true
+allowed-tools: Bash(python3 *)
+---
+
+# Start Next Task
+
+1. Run the pop command:
+   ```bash
+   python3 .mpm/scripts/task.py pop ${CLAUDE_SESSION_ID}
+   ```
+2. If the queue is empty, inform the user.
+3. Read the popped task from `.mpm/data/current/${CLAUDE_SESSION_ID}.json`.
+4. Fill in `goal`, `approach`, `verification` by analyzing the prompt:
+   ```bash
+   python3 .mpm/scripts/task.py update ${CLAUDE_SESSION_ID} goal "..."
+   python3 .mpm/scripts/task.py update ${CLAUDE_SESSION_ID} approach "..."
+   python3 .mpm/scripts/task.py update ${CLAUDE_SESSION_ID} verification "..."
+   ```
+5. Begin working on the task.
+
+When work is complete, fill the result:
+```bash
+python3 .mpm/scripts/task.py update ${CLAUDE_SESSION_ID} result "..."
+```
+
+Always respond in the user's language.
