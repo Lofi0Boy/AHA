@@ -1,6 +1,6 @@
 #!/bin/bash
 # SessionStart hook: check if MPM is initialized in this project.
-# If PROJECT.md doesn't exist, prompt the user to run /mpm-init-project.
+# If PROJECT.md doesn't exist, prompt to spawn the planner agent.
 
 INPUT=$(cat)
 CWD=$(echo "$INPUT" | jq -r '.cwd' 2>/dev/null)
@@ -9,7 +9,7 @@ CWD=$(echo "$INPUT" | jq -r '.cwd' 2>/dev/null)
 if [ -d "$CWD/.mpm" ] && [ ! -f "$CWD/.mpm/docs/PROJECT.md" ]; then
   cat <<'EOF'
 [MPM] This project hasn't been initialized yet.
-Run /mpm-init-project to set up your project name, description, and first tasks.
+Spawn the planner agent to initialize: use Agent tool with subagent_type "planner", or suggest the user run `claude --agent planner`.
 EOF
   exit 0
 fi

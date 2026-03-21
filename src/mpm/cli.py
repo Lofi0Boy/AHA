@@ -12,6 +12,14 @@ from pathlib import Path
 
 import click
 import questionary
+from questionary import Style
+
+MPM_STYLE = Style([
+    ("highlighted", "fg:orange bold"),
+    ("pointer", "fg:orange bold"),
+    ("selected", "fg:orange"),
+    ("instruction", "fg:#888888 italic"),
+])
 
 # Config lives in ~/.mpm/
 MPM_HOME = Path.home() / ".mpm"
@@ -154,6 +162,7 @@ def onboard(ctx):
         choices=all_tzs,
         default=local_tz,
         instruction="",
+        style=MPM_STYLE,
     ).ask()
     if tz is None:
         raise SystemExit(0)
@@ -186,6 +195,7 @@ def onboard(ctx):
                 "Skip for now",
             ],
             instruction="",
+            style=MPM_STYLE,
         ).ask()
         if choice is None:
             raise SystemExit(0)
@@ -295,17 +305,29 @@ def init(path):
     if path is None:
         # Interactive mode: ask where to init
         cwd = Path.cwd().resolve()
+        config = _load_config()
+        workspace = config.get("workspace", str(Path.home() / "MpmWorkspace"))
         choice = questionary.select(
             "Initialize project in:",
             choices=[
                 f"Current directory ({cwd})",
+                f"New project ({workspace}/)",
                 "Other directory",
             ],
             instruction="",
+            style=MPM_STYLE,
         ).ask()
         if choice is None:
             return
-        if choice.startswith("Other"):
+        if choice.startswith("New project"):
+            name = questionary.text("Project directory name:").ask()
+            if not name:
+                return
+            new_dir = Path(workspace) / name
+            new_dir.mkdir(parents=True, exist_ok=True)
+            path = str(new_dir)
+            click.echo(f"Created {new_dir}")
+        elif choice.startswith("Other"):
             path = questionary.path(
                 "Project path:",
                 only_directories=True,
@@ -416,7 +438,11 @@ def disable(path):
     for d in [
         project_dir / ".claude" / "skills" / "mpm-next",
         project_dir / ".claude" / "skills" / "mpm-autonext",
-        project_dir / ".claude" / "skills" / "mpm-init-project",
+        project_dir / ".claude" / "skills" / "mpm-init",
+        project_dir / ".claude" / "skills" / "mpm-init-design",
+        project_dir / ".claude" / "skills" / "mpm-task-write",
+        project_dir / ".claude" / "skills" / "mpm-init-project",  # legacy
+        project_dir / ".claude" / "agents",
     ]:
         if d.exists():
             shutil.rmtree(d)

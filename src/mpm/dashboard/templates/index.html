@@ -567,6 +567,39 @@
     }
     .task-working .ct-idle-label { color: #4caf50; }
     .task-waiting .ct-idle-label { color: #e65100; }
+    /* Start Project — uninitialized project placeholder */
+    .start-project-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+    }
+    .start-project-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 32px 48px;
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      background: none;
+      color: var(--muted);
+      font-size: 15px;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .start-project-btn:hover {
+      border-color: var(--fg);
+      color: var(--fg);
+    }
+    .start-project-btn svg {
+      opacity: 0.5;
+      transition: opacity 0.2s;
+    }
+    .start-project-btn:hover svg {
+      opacity: 1;
+    }
     /* Autonext — future queue cards get green pulse */
     .autonext-active {
       border-color: #4caf50;
@@ -1765,6 +1798,19 @@
         ${phaseHeaderHtml}
       </div>`;
 
+    // Uninitialized project — show Start Project button
+    if (!p.project_md) {
+      const startArea = `<div class="start-project-area">
+        <button class="start-project-btn" onclick="startProject('${esc(p.name)}')">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          Start Project
+        </button>
+      </div>`;
+      return `<div class="col" data-project="${esc(p.name)}">${label}<div class="stream">${startArea}</div></div>`;
+    }
+
     const historyCards = [...(p.past_tasks || [])].reverse().map(renderHistoryCard);
     const sessionCard = renderSessionCard(p);
     const cards = [
@@ -2304,6 +2350,17 @@
     let chordTimer = null;
     term.attachCustomKeyEventHandler(e => {
       if (e.type !== 'keydown') return true;
+      // Ctrl+C with selection = copy (not SIGINT)
+      if (e.ctrlKey && e.key === 'c') {
+        const sel = term.getSelection() || window.getSelection()?.toString();
+        if (sel) {
+          navigator.clipboard.writeText(sel).catch(() => {});
+          term.clearSelection();
+          window.getSelection()?.removeAllRanges();
+          return false;
+        }
+        return true;
+      }
       if (matchesShortcut(e, shortcutBindings.cycleProject)) {
         e.preventDefault();
         setTimeout(() => {
@@ -2489,7 +2546,18 @@
         ws.onclose = () => {
           entry.term.write('\r\n\x1b[90m[connection closed]\x1b[0m\r\n');
           if (project === '_mpm-init') {
-            setTimeout(() => { closeTerminal(); loadSessions(); }, 1000);
+            let countdown = 10;
+            const interval = setInterval(() => {
+              entry.term.write(`\r\x1b[90mThis panel will close in ${countdown} seconds...\x1b[0m`);
+              countdown--;
+              if (countdown < 0) {
+                clearInterval(interval);
+                closeTerminal();
+                loadSessions();
+                // Refresh page to show newly registered project
+                setTimeout(() => location.reload(), 500);
+              }
+            }, 1000);
           }
         };
         ws.onerror = () => entry.term.write('\r\n\x1b[31m[connection error]\x1b[0m\r\n');
@@ -2809,6 +2877,14 @@
     try {
       savedCliCommands = await api('/api/cli-commands', { method: 'DELETE', body: { command: cmd } });
       renderCliList();
+    } catch(e) { /* silent */ }
+  }
+
+  async function startProject(project) {
+    try {
+      await api('/api/sessions', { method: 'POST', body: { project, cli_command: 'claude --agent planner "/mpm-init"' } });
+      await loadSessions();
+      openTerminal(project);
     } catch(e) { /* silent */ }
   }
 
