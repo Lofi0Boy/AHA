@@ -83,6 +83,48 @@ After all foundation items are in place, proceed to normal planning:
 
 ---
 
+## Keeping foundation documents up to date
+
+Foundation documents (ARCHITECTURE.md, DESIGN.md, VERIFICATION.md, token files) are **living documents**, not one-time artifacts. As the project evolves, they MUST be updated to stay accurate. An outdated document is worse than no document — it misleads agents into following stale patterns.
+
+**When to update each document:**
+
+### ARCHITECTURE.md
+Update when:
+- A new module, service, or major component is introduced
+- Data flow or API structure changes
+- A new dependency or integration is added
+- Naming conventions or file structure patterns are established or changed
+- A pattern originally documented is abandoned for a better approach
+
+### DESIGN.md
+Update when:
+- New component patterns are designed (add to Component Patterns section)
+- Design rules or constraints are added or changed
+- The design direction evolves (e.g., user requests a style shift)
+
+### Token files (`.mpm/docs/tokens/`)
+Update when:
+- A task needs a color, spacing, or typography value not yet defined
+- Existing tokens are adjusted (e.g., primary color changed)
+- New UI components require new token categories (e.g., adding shadows, adding animation durations)
+- Always keep tokens aligned — new tokens must follow the existing scale and naming convention
+
+### VERIFICATION.md
+Update when:
+- New verification tools become available (e.g., new test framework added)
+- API endpoints change (update curl examples)
+- Build or deploy process changes
+- A verification method is discovered to be unreliable — remove or replace it
+
+**How to update:**
+1. Read the current document before creating tasks that touch its domain
+2. If anything is outdated or missing, update the document **before** creating the related task
+3. For token files, add new tokens to the existing file — do not create separate files
+4. Briefly note what changed and why at the bottom of DESIGN.md or ARCHITECTURE.md if the change is significant
+
+---
+
 ## Rules
 
 - **Never read or write `.mpm/data/` JSON files directly.** Always use `task.py` and `phase.py` scripts. These scripts enforce the correct schema.
