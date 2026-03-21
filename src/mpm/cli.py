@@ -114,6 +114,7 @@ def _check_deps() -> list[tuple[str, bool, str]]:
     deps = [
         ("tmux", "brew install tmux" if is_mac else "sudo apt install tmux"),
         ("ttyd", "brew install ttyd" if is_mac else "sudo snap install ttyd --classic"),
+        ("jq", "brew install jq" if is_mac else "sudo apt install jq"),
         ("claude", "npm install -g @anthropic-ai/claude-code"),
     ]
     return [(name, which(name) is not None, hint) for name, hint in deps]
