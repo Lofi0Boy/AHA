@@ -161,7 +161,6 @@ def onboard(ctx):
         "Timezone:",
         choices=all_tzs,
         default=local_tz,
-        instruction="",
         style=MPM_STYLE,
     ).ask()
     if tz is None:
