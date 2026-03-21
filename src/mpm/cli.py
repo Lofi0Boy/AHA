@@ -153,6 +153,7 @@ def onboard(ctx):
         "Timezone:",
         choices=all_tzs,
         default=local_tz,
+        instruction="",
     ).ask()
     if tz is None:
         raise SystemExit(0)
@@ -184,6 +185,7 @@ def onboard(ctx):
                 "Register existing project",
                 "Skip for now",
             ],
+            instruction="",
         ).ask()
         if choice is None:
             raise SystemExit(0)
@@ -299,6 +301,7 @@ def init(path):
                 f"Current directory ({cwd})",
                 "Other directory",
             ],
+            instruction="",
         ).ask()
         if choice is None:
             return
