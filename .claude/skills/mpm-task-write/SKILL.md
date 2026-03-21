@@ -41,10 +41,10 @@ What is explicitly out of scope.
 
 ## On UI/UX Tasks
 
-When a Task involves UI changes, `.mpm/docs/DESIGN.md` must be referenced.
+When a Task involves UI changes, `.mpm/docs/DESIGN.md` and `.mpm/docs/tokens/` must be referenced.
 
 **Include in Context:**
-- Design tokens to apply (colors, typography, spacing, etc.)
+- Design tokens to apply (from `.mpm/docs/tokens/`)
 - Existing component patterns to reuse and their code paths
 - Layout principles relevant to this Task
 
@@ -52,9 +52,9 @@ When a Task involves UI changes, `.mpm/docs/DESIGN.md` must be referenced.
 - Do not create UI Tasks without design criteria
 - Run `/mpm-init-design` skill first
 
-**If a Task needs tokens not yet defined in DESIGN.md:**
+**If a Task needs tokens not yet defined in `.mpm/docs/tokens/`:**
 - Create new tokens that are **aligned with existing ones** (same scale, naming convention, color palette)
-- Add the new tokens to DESIGN.md before or alongside the Task
+- Add the new tokens to the token file in `.mpm/docs/tokens/`
 - Never introduce ad-hoc values that bypass the token system
 
 ---

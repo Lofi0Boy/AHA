@@ -47,15 +47,15 @@ If the user provides both a URL and a description, combine them — extract from
 
 ## Step 3: Generate token code file
 
-Based on the project's tech stack (detected from ARCHITECTURE.md or package.json):
+Token files are always stored in `.mpm/docs/tokens/`. Choose the format based on the project's tech stack:
 
-| Tech stack | Token file format | Example path |
-|------------|------------------|--------------|
-| Tailwind CSS | `tailwind.config.ts` theme extend | `tailwind.config.ts` |
-| Vanilla CSS | CSS custom properties | `src/styles/tokens.css` |
-| SCSS/Sass | Variables file | `src/styles/_tokens.scss` |
-| React Native | JS/TS theme object | `src/theme/tokens.ts` |
-| Any | W3C DTCG JSON | `tokens.json` |
+| Tech stack | Token file format | Path |
+|------------|------------------|------|
+| Tailwind CSS | JS/TS theme object | `.mpm/docs/tokens/tailwind-tokens.js` |
+| Vanilla CSS | CSS custom properties | `.mpm/docs/tokens/tokens.css` |
+| SCSS/Sass | Variables file | `.mpm/docs/tokens/_tokens.scss` |
+| React Native | JS/TS theme object | `.mpm/docs/tokens/tokens.ts` |
+| Any | W3C DTCG JSON | `.mpm/docs/tokens/tokens.json` |
 
 **Start with essential tokens only:**
 - Colors: primary, secondary, background, text, border (minimum)
@@ -65,7 +65,7 @@ Based on the project's tech stack (detected from ARCHITECTURE.md or package.json
 
 More tokens will be added as development progresses and new components are designed.
 
-Place the token file in the project's existing style directory. If none exists, create one that fits the project structure.
+The project's build system or source code should import/reference from `.mpm/docs/tokens/`.
 
 ---
 
@@ -83,7 +83,7 @@ Overall design direction and principles.
 Where the design originated from (e.g., "Inspired by example.com" or "Glassmorphism style per user request").
 
 ## Token File
-Path to the actual token code file: `src/styles/tokens.css` (or wherever it was placed).
+Path to the actual token code file: `.mpm/docs/tokens/tokens.css` (format depends on tech stack).
 This is the single source of truth for token values.
 
 ## Component Patterns
