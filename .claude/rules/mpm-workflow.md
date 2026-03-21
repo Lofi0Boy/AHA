@@ -49,23 +49,24 @@ grep "session=" /tmp/mpm-hook.log | tail -1 | sed 's/.*session=//'
 
 **From queue:** Pop from the front (index 0) of `future.json` and save to `current/{session_id}.json`.
 
-**From conversation:** If there is no current task and the user requests work that involves code changes, immediately create a current task. Do this BEFORE starting the actual work.
+**From conversation:** If there is no current task and the user requests work that involves code changes, **do NOT create a task yourself**. Instead, spawn the `@planner` subagent to analyze the request and create properly scoped tasks.
 
-```bash
-# Get session ID, then create
-SID=$(grep "session=" /tmp/mpm-hook.log | tail -1 | sed 's/.*session=//')
-python3 .mpm/scripts/task.py create "$SID" "title" "prompt"
-python3 .mpm/scripts/task.py update "$SID" goal "..."
-python3 .mpm/scripts/task.py update "$SID" approach "..."
-python3 .mpm/scripts/task.py update "$SID" verification "..."
-```
+The Planner will:
+- Break down large requests into small, independently verifiable tasks
+- Add them to future.json in priority order
+- You then `pop` the first one and start working
 
 **How to judge "work that involves code changes":**
-- YES → create task: "Change the border color", "Add this feature", "Fix this bug"
-- YES → create task: User starts with a question but then says "OK do it" — create task before first edit
-- NO → no task: "How does this work?", "What's the next task?", "Why is this error happening?"
+- YES → spawn @planner: "Change the border color", "Add this feature", "Fix this bug"
+- YES → spawn @planner: User starts with a question but then says "OK do it" — before first edit
+- NO → no task needed: "How does this work?", "What's the next task?", "Why is this error happening?"
 
-Fill `goal`, `approach`, `verification`, set `status` to `active`, set `session_id`.
+After planner finishes, pop the first task:
+```bash
+python3 .mpm/scripts/task.py pop ${CLAUDE_SESSION_ID}
+```
+
+Then fill `goal`, `approach`, `verification`, set `status` to `active`.
 
 **goal = WHAT** must be true (verifiable acceptance criteria, as a checklist).
 **verification = HOW** you will check each goal item.
