@@ -304,6 +304,9 @@ def load_phases(project_dir: Path) -> dict:
     """Load phases from phases.json. Returns {current_phase, phases[]} with computed progress."""
     phases_path = _data_path(project_dir) / "phases.json"
     data = _load_json(phases_path, default={"current_phase": None, "phases": []})
+    # Handle legacy format where phases.json is a bare list or invalid
+    if not isinstance(data, dict):
+        data = {"current_phase": None, "phases": []}
 
     # Compute progress for each phase based on task completion
     for phase in data.get("phases", []):
