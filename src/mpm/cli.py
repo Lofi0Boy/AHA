@@ -537,5 +537,37 @@ def stop():
     pid_file.unlink(missing_ok=True)
 
 
+@main.command()
+@click.pass_context
+def uninstall(ctx):
+    """Remove MPM from all projects and clean up global config."""
+    config = _load_config()
+    projects = config.get("projects", [])
+
+    if not projects and not MPM_HOME.exists():
+        click.echo("Nothing to uninstall.")
+        return
+
+    if not click.confirm(f"This will disable MPM in {len(projects)} project(s) and remove {MPM_HOME}. Continue?"):
+        return
+
+    # 1. Stop dashboard
+    ctx.invoke(stop)
+
+    # 2. Disable all registered projects
+    for p in projects:
+        if Path(p).is_dir():
+            click.echo(f"\nDisabling {p}...")
+            ctx.invoke(disable, path=p)
+
+    # 3. Remove global config
+    if MPM_HOME.exists():
+        shutil.rmtree(MPM_HOME)
+        click.echo(f"\nRemoved {MPM_HOME}")
+
+    click.echo("\nMPM uninstalled. Run this to complete:")
+    click.echo("  uv tool uninstall mpm")
+
+
 if __name__ == "__main__":
     main()
