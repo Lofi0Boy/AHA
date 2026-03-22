@@ -23,20 +23,22 @@ Choose the appropriate goal and include `--goal-id <id>` when calling `task.py a
 
 ---
 
-## Required Task prompt structure
+## Task structure
 
+**Fields set by planner (via task.py add):**
+- `title` — one-line summary
+- `prompt` — context, non-goals, and any additional instructions
+- `goal` — verifiable acceptance criteria (WHAT must be true)
+- `verification` — executable verification methods (HOW to check)
+- `parent_goal` — which phase goal this serves (via --goal-id)
+
+**Prompt content (context for dev):**
 ```
-## Outcome
-State that must be true on completion. WHAT, not HOW.
-
 ## Context
 - File paths to read
 - Existing patterns to follow
 - Design tokens/components to reference (sections in DESIGN.md)
 - Architecture conventions to follow (sections in ARCHITECTURE.md)
-
-## Verification
-Executable verification methods (curl, test, screenshot, etc.)
 
 ## Non-goals
 What is explicitly out of scope.
@@ -97,18 +99,15 @@ Available verification methods:
 ## Command
 
 ```bash
-python3 .mpm/scripts/task.py add "task title" "## Outcome
-...
-
-## Context
-...
-
-## Verification
-...
+python3 .mpm/scripts/task.py add "task title" "## Context
+- File paths to read
+- Existing patterns to follow
 
 ## Non-goals
-..." --goal-id <goal_id>
+..." --goal "verifiable acceptance criteria" --verification "curl/test/screenshot commands" --goal-id <goal_id>
 ```
+
+Note: `goal` and `verification` are now **separate fields**, not part of the prompt. The prompt contains Context and Non-goals only.
 
 ---
 

@@ -9,7 +9,7 @@ Usage:
     task.py pop <session_id>              # future → current (status: dev)
     task.py create <session_id> <title> <prompt>  # → current (direct, status: dev)
     task.py complete <task_id> <verdict> [--comment "..."]  # review → past (human only)
-    task.py add <title> <prompt> [--goal-id <id>]  # → future (append to back)
+    task.py add <title> <prompt> --goal "..." --verification "..." [--goal-id <id>]  # → future
     task.py update <session_id> <field> <value>  # update current task field
     task.py review <session_id> <verdict> --summary "..." [--evidence "..."]  # agent review
     task.py status                        # show current state
@@ -193,12 +193,16 @@ def cmd_create(session_id, title, prompt):
     print(f"  title: {title}")
 
 
-def cmd_add(title, prompt, goal_id=None):
+def cmd_add(title, prompt, goal_id=None, goal=None, verification=None):
     """Add a new task to the back of future queue."""
     lock = _lock()
     try:
         future = _load_json(FUTURE_PATH, [])
         task = _new_task(title, prompt, parent_goal=goal_id)
+        if goal:
+            task["goal"] = goal
+        if verification:
+            task["verification"] = verification
         future.append(task)
         _save_json(FUTURE_PATH, future)
     finally:
@@ -391,7 +395,7 @@ def cmd_update_field(session_id, field, value):
         print(f"ERROR: no task for session {session_id}")
         sys.exit(1)
 
-    valid_fields = ("title", "goal", "approach", "verification", "result", "memo")
+    valid_fields = ("title", "goal", "approach", "verification", "result", "memo")  # goal/verification set by planner at creation, dev can override if needed
     if field not in valid_fields:
         print(f"ERROR: field must be one of {valid_fields}")
         sys.exit(1)
@@ -431,14 +435,22 @@ def main():
         cmd_complete(sys.argv[2], sys.argv[3], comment=comment)
     elif cmd == "add" and len(sys.argv) >= 4:
         goal_id = None
+        goal = None
+        verification = None
         i = 4
         while i < len(sys.argv):
             if sys.argv[i] == "--goal-id" and i + 1 < len(sys.argv):
                 goal_id = sys.argv[i + 1]
                 i += 2
+            elif sys.argv[i] == "--goal" and i + 1 < len(sys.argv):
+                goal = sys.argv[i + 1]
+                i += 2
+            elif sys.argv[i] == "--verification" and i + 1 < len(sys.argv):
+                verification = sys.argv[i + 1]
+                i += 2
             else:
                 i += 1
-        cmd_add(sys.argv[2], sys.argv[3], goal_id=goal_id)
+        cmd_add(sys.argv[2], sys.argv[3], goal_id=goal_id, goal=goal, verification=verification)
     elif cmd == "review" and len(sys.argv) >= 4:
         summary = None
         evidence = None

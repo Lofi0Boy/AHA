@@ -47,7 +47,8 @@ All locations use the same schema. All fields exist from creation, progressively
 | `id`, `title`, `prompt`, `created` | Task creation | Planner (add) or Dev (create) |
 | `parent_goal` | Task creation | Planner |
 | `session_id` | Pop | Dev (pop) |
-| `goal`, `approach`, `verification` | Dev start | Dev |
+| `goal`, `verification` | Task creation | Planner (add) |
+| `approach` | Dev start | Dev |
 | `result`, `memo` | Dev done | Dev |
 | `agent_reviews` | Agent review | Reviewer (appended) |
 | `human_review` | Human review | Human (dashboard) |
@@ -119,10 +120,10 @@ After planner finishes, pop the first task:
 python3 .mpm/scripts/task.py pop ${CLAUDE_SESSION_ID}
 ```
 
-Then fill `goal`, `approach`, `verification` via `task.py update`.
+The task already has `goal` and `verification` set by planner. Fill `approach` via `task.py update`.
 
-**goal = WHAT** must be true (verifiable acceptance criteria, as a checklist).
-**verification = HOW** you will check each goal item.
+**goal** and **verification** are set by the planner. Read them carefully before starting.
+**approach** = HOW you will implement (fill this yourself).
 
 Available verification methods (prefer self-verification when possible):
 - **curl + parse**: `curl -s URL | grep/jq ...` — for API responses, served HTML content
@@ -172,16 +173,10 @@ Tasks in `review/` are displayed on the dashboard with the reviewer's summary an
 
 Rejected tasks are picked up by the Planner agent via /mpm-recycle, which rewrites the prompt and returns them to future.
 
-### 6. Postpone/discard
-
-Only from `review/` (human-review status), the human can:
-- **Discard** → `task.py complete <task_id> discard` → past
-
 ## Rules
 
 - **All task JSON operations must go through `task.py`** — never read/write `.mpm/data/` JSON files directly.
-- **Dev never calls `task.py complete`** — only humans (via dashboard) move tasks to past.
-- Always pop from the **front** (index 0) of future.json.
-- Append new tasks to the **back** of future.json.
+- **Dev never cataskslls `task.py complete`** — only humans (via dashboard) move tasks to past.
+- Append new  to the **back** of future.json.
 - Only one task per session in current.
 - Always respond to the user in their language.

@@ -8,10 +8,8 @@ maxTurns: 30
 skills:
   - mpm-init
   - mpm-init-design
-  - mpm-task-write
   - mpm-recycle
----
-
+  - mpm-task-write
 You are the project's planning specialist. Your core value is **consistency** â€” every planning decision aligns with the project's vision, architecture, and design.
 
 ## What you do
@@ -31,7 +29,7 @@ You are the project's planning specialist. Your core value is **consistency** â€
 
 ```bash
 # Tasks
-python3 .mpm/scripts/task.py add "title" "prompt" --goal-id <goal_id>
+python3 .mpm/scripts/task.py add "title" "prompt" --goal "acceptance criteria" --verification "how to verify" --goal-id <goal_id>
 python3 .mpm/scripts/task.py status
 python3 .mpm/scripts/task.py remove <task_id>
 python3 .mpm/scripts/task.py rejected

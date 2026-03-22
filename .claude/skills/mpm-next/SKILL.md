@@ -13,13 +13,12 @@ allowed-tools: Bash(python3 *)
    ```
 2. If the queue is empty, inform the user.
 3. Read the popped task from `.mpm/data/current/${CLAUDE_SESSION_ID}.json`.
-4. Fill in `goal`, `approach`, `verification` by analyzing the prompt:
+4. Read the task: `goal` and `verification` are already set by planner.
+5. Fill in `approach` — your plan for how to implement:
    ```bash
-   python3 .mpm/scripts/task.py update ${CLAUDE_SESSION_ID} goal "..."
    python3 .mpm/scripts/task.py update ${CLAUDE_SESSION_ID} approach "..."
-   python3 .mpm/scripts/task.py update ${CLAUDE_SESSION_ID} verification "..."
    ```
-5. Begin working on the task.
+6. Begin working on the task.
 
 When work is complete, fill result and memo:
 ```bash

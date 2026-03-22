@@ -42,9 +42,8 @@ echo "🚀 MPM Auto-Next activated"
    python3 .mpm/scripts/task.py pop ${CLAUDE_SESSION_ID}
    ```
 
-2. Read the task and fill `goal`, `approach`, `verification`.
-   - **goal**: verifiable acceptance criteria (checklist)
-   - **verification**: HOW to check — prefer self-verification:
+2. Read the task. `goal` and `verification` are already set by planner. Fill `approach`.
+   - **verification** (already set): HOW to check — prefer self-verification:
      - `/chrome` — interact with live pages (click, type, scroll, read console). Best for UI verification
      - `google-chrome --headless --screenshot=...` — quick static visual checks
      - `curl -s URL | grep/jq ...` — API responses, HTML content
@@ -62,8 +61,6 @@ echo "🚀 MPM Auto-Next activated"
    - **fail** → task returns to `dev`, fix issues and update result again.
 
 6. After reviewer passes, current/ is empty. The Stop hook pops the next task from future.
-
-7. Human reviews completed tasks in `review/` asynchronously — dev does not wait.
 
 ## Rules
 
