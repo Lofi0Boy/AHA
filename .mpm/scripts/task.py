@@ -31,6 +31,8 @@ FUTURE_PATH = DATA_DIR / "future.json"
 CURRENT_DIR = DATA_DIR / "current"
 REVIEW_DIR = DATA_DIR / "review"
 PAST_DIR = DATA_DIR / "past"
+DOCS_DIR = Path(__file__).parent.parent / "docs"
+FEEDBACK_PATH = DOCS_DIR / "FEEDBACK.md"
 CONFIG_PATH = Path.home() / ".mpm" / "config.json"
 
 # Canonical task schema — all fields present from creation, progressively filled
@@ -153,6 +155,9 @@ def cmd_complete(task_id, verdict, comment=None):
     past = _load_json(past_path, [])
     past.append(task)
     _save_json(past_path, past)
+
+    # Append to FEEDBACK.md
+    _append_feedback(task, verdict, comment)
 
     # Remove from review
     review_path.unlink()

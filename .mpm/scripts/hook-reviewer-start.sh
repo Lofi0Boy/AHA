@@ -46,6 +46,14 @@ if [[ -d "$TOKEN_DIR" ]]; then
   done
 fi
 
+# --- Feedback history ---
+FEEDBACK="$DOCS_DIR/FEEDBACK.md"
+if [[ -f "$FEEDBACK" ]]; then
+  echo "### FEEDBACK.md (human review history — learn from past judgments)"
+  cat "$FEEDBACK"
+  echo ""
+fi
+
 # --- 3. Phase/Goal status ---
 echo "### Phase/Goal Status"
 python3 "$SCRIPTS_DIR/phase.py" status 2>/dev/null || echo "(no phases)"
