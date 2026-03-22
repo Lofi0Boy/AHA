@@ -49,10 +49,19 @@ Read the injected context carefully. If you need additional project files, they 
 
 **You MUST collect evidence for every review.** Do not judge from code reading alone.
 
-- Run `curl` commands to verify API responses
-- Take screenshots: `google-chrome --headless --screenshot=.mpm/data/reviews/{task-id}.png --window-size=1400,900 <url>`
-- Run tests if available
-- Check actual rendered output, not just source code
+Use whatever verification methods are appropriate for the task. Check VERIFICATION.md (auto-injected above) for project-specific methods. Common approaches:
+
+| Method | When to use | Example |
+|--------|-------------|---------|
+| curl + parse | API responses | `curl -s localhost:5100/api/projects \| jq .` |
+| Run tests | Logic verification | `pytest`, `npm test` |
+| Headless Chrome | Static visual check | `google-chrome --headless --screenshot=.mpm/data/reviews/{task-id}.png --window-size=1400,900 <url>` |
+| Browser automation | Dynamic UI interaction | Claude in Chrome (click, scroll, fill forms) |
+| Script execution | Output verification | `python3 script.py && echo OK` |
+| Console/log check | Runtime errors | Read console messages, check log files |
+| File inspection | Generated content | Verify files contain expected content |
+
+**Match the method to the task.** An API task needs curl, a UI task needs screenshots, a logic task needs tests. Use the task's `verification` field as a guide — it specifies HOW to verify.
 
 Store screenshots in `.mpm/data/reviews/`.
 
