@@ -1,6 +1,6 @@
 ---
 name: mpm-task-write
-description: Create well-structured tasks for developer agents with proper Outcome/Context/Verification format.
+description: Create well-structured tasks with proper Outcome/Context/Verification format.
 ---
 
 # Write Tasks
@@ -11,13 +11,15 @@ Create tasks that developer agents can execute autonomously.
 
 ## Goal assignment
 
-Every task MUST belong to a goal. Before creating tasks:
+Every task MUST belong to a goal. Current goals:
 
-1. Run `phase.py status` to see current goals and their IDs
-2. Decide which goal each task serves
-3. Include `--goal-id <id>` when calling `task.py add`
+!`python3 .mpm/scripts/phase.py status 2>/dev/null || echo "(no phases — run /mpm-init first)"`
+
+Choose the appropriate goal and include `--goal-id <id>` when calling `task.py add`.
 
 **If no suitable goal exists:** Create one first with `phase.py goal-add <phase_id> "title"`.
+
+**NEVER write .mpm/data/ JSON files directly.** Always use `task.py add`.
 
 ---
 
@@ -79,12 +81,12 @@ Available verification methods:
 
 | Method | Use case | Example |
 |--------|----------|---------|
+| Browser automation | Dynamic UI check | Claude in Chrome, etc. |
 | curl + parse | API response check | `curl -s localhost:5100/api/projects \| jq .field` |
 | Run tests | Logic verification | `pytest tests/test_auth.py` |
 | Script execution | Output check | `python3 script.py && echo OK` |
 | File inspection | Creation/modification check | Verify file contains expected content |
 | Chrome | Static visual check | `google-chrome --headless --screenshot=...` |
-| Browser automation | Dynamic UI check | Claude in Chrome, etc. |
 | User confirmation | **Last resort** | Only when above methods cannot verify |
 
 **Bad:** "Verify the feature works correctly"
