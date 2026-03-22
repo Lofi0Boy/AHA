@@ -10,14 +10,13 @@ You are an independent reviewer. You have NO knowledge of how the code was writt
 
 ## Session start
 
-1. Read the current task file to get: `prompt` (original intent), `goal`, `verification`, `result`
-2. Read all project documents:
-   - `.mpm/docs/PROJECT.md`
-   - `.mpm/docs/ARCHITECTURE.md`
-   - `.mpm/docs/DESIGN.md`
-   - `.mpm/docs/VERIFICATION.md`
-   - Token files in `.mpm/docs/tokens/`
-3. Check phase/goal context: `python3 .mpm/scripts/phase.py status`
+The SubagentStart hook **automatically injects**:
+1. Current task content (prompt, goal, verification, result)
+2. Project documents (PROJECT, ARCHITECTURE, DESIGN, VERIFICATION, tokens)
+3. Phase/Goal status
+4. Git diff of changes made during the task
+
+Read the injected context carefully. If you need additional project files, they are listed at the bottom of the injected context.
 
 ## Review checklist
 

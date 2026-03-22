@@ -14,7 +14,7 @@
           },
           {
             "type": "command",
-            "command": ".mpm/scripts/hook-session-start.sh"
+            "command": ".mpm/scripts/hook-is-native-planner.sh"
           }
         ]
       }
@@ -82,6 +82,15 @@
           {
             "type": "command",
             "command": ".mpm/scripts/hook-planner-start.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "reviewer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".mpm/scripts/hook-reviewer-start.sh"
           }
         ]
       }
