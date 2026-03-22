@@ -108,8 +108,8 @@ User opens Claude in project (or clicks "Start Project" on dashboard)
     → Spawns planner agent [non-deterministic]
 
 Planner session starts:
-  → planner.md body: "read all docs, check PPGT+ADV layers" [non-deterministic]
-  → Finds PROJECT.md missing → follows mpm-init skill instructions [non-deterministic]
+  → SubagentStart hook injects docs + status + gap directive [deterministic]
+  → Planner follows directive → mpm-init skill [non-deterministic]
 ```
 
 #### mpm-init skill flow
@@ -140,14 +140,17 @@ DESIGN.md stored in: .mpm/docs/DESIGN.md (concept/rules only, not token values)
 
 #### Session start behavior
 ```
-planner.md body instructs [non-deterministic]:
-  1. Read all .mpm/docs/ files
-  2. phase.py status
-  3. task.py status
-  4. Read latest past file
-  5. Check for rejected tasks in past (human_review.verdict == "rejected")
-     → create corrective tasks in future
-  6. Check PPGT+ADV layers top-down → fill first gap found
+SubagentStart hook: hook-planner-start.sh [deterministic]
+  → Injects all project documents into planner context
+  → Injects phase.py status + task.py status
+  → Checks foundation gaps in order:
+    PROJECT.md → Phase → ARCHITECTURE.md → DESIGN.md → VERIFICATION.md
+    → Goals → Tasks → Rejected tasks
+  → Outputs first gap as directive
+
+Planner reads directive [non-deterministic]:
+  → Follows the indicated skill or action
+  → e.g. "GAP: ARCHITECTURE.md is missing → Scan codebase, write ARCHITECTURE.md"
 ```
 
 #### Task creation
@@ -280,9 +283,9 @@ Reject + comment → API → task.py complete <task_id> rejected → past [deter
 Discard → API → task.py complete <task_id> discard → past [deterministic]
 
 Rejected tasks:
-  → Planner detects in past on next session start [non-deterministic]
-  → human_review.verdict == "rejected" + human_review.comment
-  → Creates corrective task in future [non-deterministic]
+  → hook-planner-start.sh detects rejected in past [deterministic]
+  → Planner follows /mpm-recycle skill [non-deterministic]
+  → Rewrites prompt with rejection context → task.py recycle → future
 ```
 
 ---
@@ -380,12 +383,13 @@ All fields exist from creation. Progressively filled, never added or removed:
 │   ├── VERIFICATION.md          # Self-verification methods
 │   └── tokens/                  # Design token code files
 └── scripts/
-    ├── task.py                  # Task CRUD (pop, create, add, update, review, escalate, complete, status, remove)
+    ├── task.py                  # Task CRUD (pop, create, add, update, review, escalate, complete, rejected, recycle, status, remove)
     ├── phase.py                 # Phase/Goal CRUD (add, remove, activate, goal-add, goal-done, status)
     ├── hook-init-check.sh       # SessionStart: check PROJECT.md
     ├── hook-notify.sh           # Status updates to dashboard
     ├── hook-task-reminder.sh    # UserPromptSubmit: show current task
     ├── hook-pretool-task-check.sh  # PreToolUse: BLOCK if no task
+    ├── hook-planner-start.sh    # SubagentStart(planner): inject docs + gap directive
     ├── hook-review.sh           # Stop: trigger reviewer
     └── hook-autonext-stop.sh    # Stop: auto-next queue management
 
@@ -398,7 +402,8 @@ All fields exist from creation. Progressively filled, never added or removed:
 │   ├── mpm-init-design/SKILL.md # Design system setup
 │   ├── mpm-task-write/SKILL.md  # Task writing guidelines
 │   ├── mpm-next/SKILL.md        # Pop and execute next task
-│   └── mpm-autonext/SKILL.md    # Auto-process task queue
+│   ├── mpm-autonext/SKILL.md    # Auto-process task queue
+│   └── mpm-recycle/SKILL.md     # Recycle rejected tasks with rewritten prompts
 ├── rules/
 │   └── mpm-workflow.md          # Shared rules (task workflow, review pipeline)
 └── settings.json                # Hook definitions
@@ -409,7 +414,7 @@ All fields exist from creation. Progressively filled, never added or removed:
 ## Deterministic vs Non-deterministic Summary
 
 ### Deterministic (guaranteed)
-- All hook triggers (SessionStart, Stop, PreToolUse, UserPromptSubmit)
+- All hook triggers (SessionStart, SubagentStart, Stop, PreToolUse, UserPromptSubmit)
 - All script operations (task.py, phase.py)
 - Hook block logic (pretool-task-check BLOCKS edits without task)
 - Status auto-transition: `dev` → `agent-review` when result is filled
@@ -437,5 +442,5 @@ All fields exist from creation. Progressively filled, never added or removed:
 | Reviewer doesn't run task.py review | hook detects agent-review status persists → re-triggers [deterministic] |
 | Reviewer passes bad work | Human review catches it |
 | 3x reviewer fail | task.py escalate → review/ for human judgment [deterministic] |
-| Planner misses rejected tasks | No defense (relies on planner.md instructions) |
+| Planner misses rejected tasks | hook-planner-start.sh detects and directs [deterministic] |
 | Agent ignores skill steps | No defense (inherent LLM limitation) |
