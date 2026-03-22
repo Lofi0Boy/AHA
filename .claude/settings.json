@@ -11,6 +11,10 @@
           {
             "type": "command",
             "command": ".mpm/scripts/hook-init-check.sh"
+          },
+          {
+            "type": "command",
+            "command": ".mpm/scripts/hook-session-start.sh"
           }
         ]
       }
