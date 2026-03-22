@@ -130,7 +130,7 @@ def cmd_complete(task_id, verdict, comment=None):
         print(f"ERROR: task status is '{task['status']}', must be 'human-review' to complete")
         sys.exit(1)
 
-    valid_verdicts = ("success", "rejected", "postpone", "discard")
+    valid_verdicts = ("success", "rejected", "discard")
     if verdict not in valid_verdicts:
         print(f"ERROR: verdict must be one of {valid_verdicts}")
         sys.exit(1)
