@@ -33,16 +33,53 @@ Choose the appropriate goal and include `--goal-id <id>` when calling `task.py a
 - `parent_goal` — which phase goal this serves (via --goal-id)
 
 **Prompt content (context for dev):**
+
+Before writing the prompt, **read all documents in `.mpm/docs/`** and extract sections relevant to this task.
+
 ```
 ## Context
-- File paths to read
-- Existing patterns to follow
-- Design tokens/components to reference (sections in DESIGN.md)
-- Architecture conventions to follow (sections in ARCHITECTURE.md)
+- File paths to read (specific files the dev agent should read before starting)
+- Architecture conventions to follow (cite specific sections from ARCHITECTURE.md)
+- Existing patterns to follow (reference actual code patterns in the codebase)
+- [UI tasks only] Design system constraints (cite DESIGN.md sections + token file paths)
 
 ## Non-goals
 What is explicitly out of scope.
 ```
+
+**The prompt must be self-contained.** A dev agent reading only the prompt (without foundation docs) should have enough context to start working. Don't say "follow ARCHITECTURE.md" — say "follow the error handling pattern in ARCHITECTURE.md §Error Handling: use named exceptions, never catch-all."
+
+---
+
+## Task granularity
+
+A task must be a **single function** verifiable with **1–2 evidence items**.
+
+### Split triggers — if ANY of these apply, split into multiple tasks:
+
+| Trigger | Example |
+|---------|---------|
+| Evidence ≥ 3 | "API returns OK, screenshot matches, config file updated" → 3 tasks |
+| Separate file areas ≥ 2 | "Change backend handler AND update frontend component" → 2 tasks |
+| AND-connected requirements | "Add auth middleware and add rate limiting" → 2 tasks |
+| Goal has multiple verbs | "Create endpoint, write migration, update docs" → 3 tasks |
+
+### How to split
+
+1. Each sub-task gets its own `task.py add` call
+2. Add tasks **in dependency order** (first dependency = first in queue)
+3. If task B depends on task A's output, state it in B's Context: `"Depends on: <A's title>. Read <file A modifies> for context."`
+4. Each sub-task must be independently verifiable — never "verify together with task X"
+
+### Example
+
+**Before (too big):**
+> "Add user profile page with API endpoint, database migration, and frontend component"
+
+**After (split):**
+1. "Add user profile DB migration" — evidence: migration runs, table exists
+2. "Add GET /api/profile endpoint" — evidence: `curl` returns profile JSON
+3. "Add profile page frontend component" — evidence: screenshot shows profile
 
 ---
 
@@ -50,8 +87,8 @@ What is explicitly out of scope.
 
 - **Outcome over process.** Describe "what"; the developer agent decides "how".
 - **Be specific.** "`/health` endpoint returns `{status: 'ok'}`" > "Add health checking"
-- **Check upward consistency.** Always verify the Task aligns with its Goal, Phase, and Project purpose.
-- **Reference ADV documents.** Include relevant ARCHITECTURE.md conventions and DESIGN.md tokens in Context.
+- **Check upward consistency.** Always verify the Task aligns with its Goal, Phase, and Project purpose. Read PROJECT.md to confirm the task serves the product vision.
+- **Ground in foundation docs.** Every task prompt must cite specific sections from `.mpm/docs/` documents — not just mention them generically.
 
 ---
 
@@ -60,9 +97,14 @@ What is explicitly out of scope.
 When a Task involves UI changes, `.mpm/docs/DESIGN.md` and `.mpm/docs/tokens/` must be referenced.
 
 **Include in Context:**
-- Design tokens to apply (from `.mpm/docs/tokens/`)
+- Design tokens to apply (cite specific token names from `.mpm/docs/tokens/`)
 - Existing component patterns to reuse and their code paths
-- Layout principles relevant to this Task
+- Layout principles relevant to this Task (cite DESIGN.md sections)
+
+**Include in prompt — dev agent instructions:**
+- "Read `.mpm/docs/DESIGN.md` and `.mpm/docs/tokens/` before starting."
+- "Follow `/ui-ux-pro-max` skill UX guidelines for interaction patterns, accessibility, and animation."
+- "Before marking done, run through the pre-delivery checklist in `/ui-ux-pro-max` skill."
 
 **If DESIGN.md is missing or incomplete:**
 - Do not create UI Tasks without design criteria
