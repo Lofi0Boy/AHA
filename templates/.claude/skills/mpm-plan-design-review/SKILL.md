@@ -104,7 +104,7 @@ Explain what a 10 looks like for THIS plan.
 
 ### 0B. DESIGN.md Status
 - If DESIGN.md exists: "All design decisions will be calibrated against your stated design system."
-- If no DESIGN.md: "No design system found. Recommend running /mpm-init-design first. Proceeding with universal design principles."
+- If no DESIGN.md: "No design system found. Recommend running /mpm-init-uiux first. Proceeding with universal design principles."
 
 ### 0C. Existing Design Leverage
 What existing UI patterns, components, or design decisions in the codebase should this plan reuse? Don't reinvent what already works.
@@ -239,7 +239,7 @@ Flag specific patterns:
 
 ### Pass 5: Design System Alignment
 Rate 0-10: Does the plan align with DESIGN.md?
-FIX TO 10: If DESIGN.md exists, annotate with specific tokens/components. If no DESIGN.md, flag the gap and recommend `/mpm-init-design`.
+FIX TO 10: If DESIGN.md exists, annotate with specific tokens/components. If no DESIGN.md, flag the gap and recommend `/mpm-init-uiux`.
 Flag any new component — does it fit the existing vocabulary?
 **STOP.** AskUserQuestion once per issue. Do NOT batch. Recommend + WHY.
 

@@ -108,7 +108,7 @@ When a Task involves UI changes, `.mpm/docs/DESIGN.md` and `.mpm/docs/tokens/` m
 
 **If DESIGN.md is missing or incomplete:**
 - Do not create UI Tasks without design criteria
-- Run `/mpm-init-design` skill first
+- Run `/mpm-init-uiux` skill first
 
 **If a Task needs tokens not yet defined in `.mpm/docs/tokens/`:**
 - Create new tokens that are **aligned with existing ones** (same scale, naming convention, color palette)

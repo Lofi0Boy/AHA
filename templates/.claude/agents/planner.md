@@ -7,7 +7,7 @@ disallowedTools: Agent
 maxTurns: 30
 skills:
   - mpm-init
-  - mpm-init-design
+  - mpm-init-uiux
   - mpm-recycle
   - mpm-task-write
 ---

@@ -5,11 +5,15 @@ description: Code quality review — architecture compliance, DRY, security, err
 
 # Code Review
 
-Review the code changes against project standards. Read `.mpm/docs/` documents for conventions.
+> **Review context (injected by reviewer):**
+> - **Task fields** — `goal` (acceptance criteria), `prompt` (context + non-goals), `verification` (how to check). These define what was requested. Judge against them exactly.
+> - **`.mpm/docs/ARCHITECTURE.md`** — primary criteria for code structure, patterns, conventions.
+> - **`.mpm/docs/PROJECT.md`** — product vision. Code that works but doesn't serve the product direction should be flagged.
+> - **`.mpm/docs/VERIFICATION.md`** — check if the dev used the correct verification methods.
 
 ## 1. Architecture compliance
 
-Read ARCHITECTURE.md from the injected context. Check:
+Check against the injected ARCHITECTURE.md:
 - Does the code follow the stated patterns? (naming, module structure, data flow)
 - Are new files in the right directories?
 - Does the code respect component boundaries?

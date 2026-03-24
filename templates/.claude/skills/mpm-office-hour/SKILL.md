@@ -55,25 +55,6 @@ Before building infrastructure, unfamiliar patterns, or anything the runtime mig
 
 ---
 
-## Browse Setup
-
-```bash
-_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-B=""
-[ -n "$_ROOT" ] && [ -x "$_ROOT/.claude/skills/gstack/browse/dist/browse" ] && B="$_ROOT/.claude/skills/gstack/browse/dist/browse"
-[ -z "$B" ] && [ -x "$HOME/.claude/skills/gstack/browse/dist/browse" ] && B="$HOME/.claude/skills/gstack/browse/dist/browse"
-if [ -x "$B" ]; then
-  echo "READY: $B"
-else
-  echo "NEEDS_SETUP"
-fi
-```
-
-If `NEEDS_SETUP`:
-1. Tell the user: "Browse tool needs setup for visual sketches. OK to proceed?" Then STOP and wait.
-2. Run: `cd ~/.claude/skills/gstack && ./setup` (or the local skill path)
-3. If `bun` is not installed: `curl -fsSL https://bun.sh/install | bash`
-
 ---
 
 # Office Hours
@@ -430,56 +411,70 @@ or interactive elements), generate a rough wireframe to help the user visualize 
 If the idea is backend-only, infrastructure, or has no UI component — skip this
 section silently.
 
-**Step 1: Gather design context**
+> Tell the user: "I'll generate a quick wireframe sketch to help visualize the layout and functionality. This is intentionally rough — just boxes and labels, not design. Visual design (colors, typography, styling) will be handled separately later via `/mpm-init-uiux`."
 
-1. Check if `.mpm/docs/design/MASTER.md` or `.mpm/docs/DESIGN.md` exists. If it does, read it for design
-   system constraints (colors, typography, spacing, component patterns). Use these
-   constraints in the wireframe.
-2. Apply core design principles:
-   - **Information hierarchy** — what does the user see first, second, third?
-   - **Interaction states** — loading, empty, error, success, partial
-   - **Edge case paranoia** — what if the name is 47 chars? Zero results? Network fails?
-   - **Subtraction default** — "as little design as possible" (Rams). Every element earns its pixels.
-   - **Design for trust** — every interface element builds or erodes user trust.
+**Step 1: Focus on wireframe elements only**
+
+Think about:
+- **Information hierarchy** — what does the user see first, second, third?
+- **Layout and grouping** — which elements are together, how sections are arranged
+- **Core interaction flow** — what buttons exist, where they lead, what forms are needed
+- **States** — what does the screen look like when empty, loading, or in error?
+
+**Do NOT consider:** colors, typography, spacing tokens, visual style, design system, branding. Ignore DESIGN.md entirely at this stage. This is a structural sketch.
 
 **Step 2: Generate wireframe HTML**
 
-Generate a single-page HTML file with these constraints:
-- **Intentionally rough aesthetic** — use system fonts, thin gray borders, no color,
-  hand-drawn-style elements. This is a sketch, not a polished mockup.
-- Self-contained — no external dependencies, no CDN links, inline CSS only
+Generate a single-page HTML file. **Strict wireframe rules:**
+- **Gray boxes, black text, white background ONLY** — no colors, no gradients, no shadows
+- System fonts only (`font-family: system-ui`)
+- Thin gray borders (`1px solid #ccc`) for all containers
+- Labels for every element describing its function (e.g., "[Search Input]", "[User Avatar]", "[Submit Button]")
+- Dashed borders for placeholder/optional areas
+- **NO styling beyond basic layout** — no border-radius, no hover effects, no animations
+- Self-contained — no external dependencies, inline CSS only
 - Show the core interaction flow (1-3 screens/states max)
-- Include realistic placeholder content (not "Lorem ipsum" — use content that
-  matches the actual use case)
-- Add HTML comments explaining design decisions
+- Include realistic placeholder content (not "Lorem ipsum")
+- Add HTML comments explaining layout decisions
 
-Write to a temp file:
+Write to:
 ```bash
-SKETCH_FILE="/tmp/mpm-sketch-$(date +%s).html"
+mkdir -p .mpm/gstack/sketches
+SKETCH_FILE=".mpm/gstack/sketches/sketch-$(date +%s).html"
 ```
 
 **Step 3: Render and capture**
 
-```bash
-$B goto "file://$SKETCH_FILE"
-$B screenshot /tmp/mpm-sketch.png
-```
+Try to render the sketch in order of preference:
 
-If `$B` is not available (browse binary not set up), fall back to headless Chrome:
-```bash
-google-chrome --headless --screenshot=/tmp/mpm-sketch.png --window-size=1280,900 "file://$SKETCH_FILE"
-```
+1. **gstack browse** (if available):
+   ```bash
+   gstack-browse goto "file://$(pwd)/$SKETCH_FILE" && gstack-browse screenshot .mpm/gstack/sketches/sketch.png
+   ```
+2. **Headless Chrome** (if available):
+   ```bash
+   google-chrome --headless --screenshot=.mpm/gstack/sketches/sketch.png --window-size=1280,900 "file://$(pwd)/$SKETCH_FILE"
+   ```
+3. **None available** — tell the user:
+   > "I generated a wireframe HTML file at `{SKETCH_FILE}`. Please open it in your browser and let me know what you think of the layout."
 
 **Step 4: Present and iterate**
 
-Show the screenshot to the user. Ask: "Does this feel right? Want to iterate on the layout?"
+If a screenshot was captured, show it to the user. Otherwise, wait for the user to open the HTML file themselves.
+
+Ask: "Does this layout and flow make sense? Focus on what's where and how it works — we'll handle the visual design later."
 
 If they want changes, regenerate the HTML with their feedback and re-render.
 If they approve or say "good enough," proceed.
 
-**Step 5: Include in design doc**
+**Step 5: Cleanup and reference**
 
-Reference the wireframe screenshot in the design doc's "Recommended Approach" section.
+After the design doc is written, delete the sketch files:
+```bash
+rm -rf .mpm/gstack/sketches/
+```
+
+In the design doc, describe the wireframe layout in text (what sections exist, how they're arranged, interaction flow). Do not reference screenshot file paths.
 
 ---
 

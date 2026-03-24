@@ -5,13 +5,16 @@ description: Verify that the implementation actually works. Run verification met
 
 # Functional Review
 
-Verify the implementation actually does what the task's `goal` says. Not "similar to" — exactly.
+> **Review context (injected by reviewer):**
+> - **Task fields** — `goal` (acceptance criteria), `prompt` (context + non-goals), `verification` (how to check). These define what was requested. Judge against them exactly.
+> - **`.mpm/docs/VERIFICATION.md`** — project-specific verification tools and exact commands. Use these, do not guess commands.
+> - **`.mpm/docs/PROJECT.md`** — product vision and target users. A feature that "works" but contradicts the product direction is a FAIL.
 
 ## Do not trust the dev's claim. Run everything yourself.
 
 ### 1. Run task verification
 
-Execute every verification method listed in the task's `verification` field. Record pass/fail for each.
+Execute every verification method from the task's `verification` field and from `VERIFICATION.md`. Record pass/fail for each.
 
 ### 2. Test the running app
 

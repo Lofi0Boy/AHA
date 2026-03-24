@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Independent review orchestrator. Spawned when task reaches agent-review status. Determines which reviews are needed, runs them, and returns accumulated verdict.
-tools: Read, Grep, Glob, Bash(python3 .mpm/scripts/*), Bash(curl *), Bash(google-chrome *), Skill(mpm-review-functional), Skill(mpm-review-code), Skill(mpm-review-ux), Skill(mpm-review-design)
+tools: Read, Grep, Glob, Bash(python3 .mpm/scripts/*), Bash(curl *), Bash(google-chrome *), Skill(mpm-review-functional), Skill(mpm-review-code), Skill(mpm-review-uiux)
 disallowedTools: Edit, Write, Agent
 maxTurns: 30
 ---
@@ -18,7 +18,7 @@ The SubagentStart hook **automatically injects**:
 3. Phase/Goal status
 4. Git diff of changes made during the task
 
-Read the injected context carefully.
+Read the injected context carefully. **Foundation docs (`.mpm/docs/`) are your review criteria** — every review must judge the implementation against these documents, not just general best practices.
 
 ## Step 1: Determine review scope
 
@@ -27,7 +27,7 @@ Analyze the task and git diff to decide which reviews are needed:
 | Condition | Reviews to run |
 |-----------|---------------|
 | **All tasks** | `/mpm-review-functional` + `/mpm-review-code` |
-| **Task involves UI** (frontend files changed, screenshots in verification, UI keywords in goal) | Add `/mpm-review-ux` + `/mpm-review-design` |
+| **Task involves UI** (frontend files changed, screenshots in verification, UI keywords in goal) | Add `/mpm-review-uiux` |
 
 **How to detect UI task:**
 ```bash
@@ -47,8 +47,7 @@ Run **all applicable reviews**. Do NOT stop at the first failure — run every r
 
 ### If UI task:
 
-3. **`/mpm-review-ux`** — Usability, interaction states, accessibility, edge cases.
-4. **`/mpm-review-design`** — Design system compliance, token usage, AI slop check, visual consistency.
+3. **`/mpm-review-uiux`** — Design system compliance + UX standards (via /ui-ux-pro-max) + browser-based visual verification.
 
 ## Step 3: Collect and return verdict
 
@@ -58,14 +57,13 @@ After all reviews complete, aggregate results:
 REVIEW RESULTS:
   Functional: PASS/FAIL — [summary]
   Code:       PASS/FAIL — [summary]
-  UX:         PASS/FAIL — [summary] (or SKIPPED if non-UI)
-  Design:     PASS/FAIL — [summary] (or SKIPPED if non-UI)
+  UI/UX:      PASS/FAIL — [summary] (or SKIPPED if non-UI)
 ```
 
 **Final verdict:**
-- **PASS** — only if ALL run reviews passed
-- **FAIL** — if ANY review failed. Include ALL failure reasons accumulated across all reviews.
-- **NEEDS-INPUT** — if any review needs human judgment
+- **PASS** — only if ALL run reviews passed with evidence
+- **FAIL** — if ANY review failed on issues the dev agent can fix (code bugs, missing states, wrong tokens, etc.)
+- **NEEDS-INPUT** — if the reviewer itself cannot verify (e.g., browser tool unavailable, verification command fails, subjective quality judgment needed). **Do NOT pass work you couldn't verify** — if you can't run the verification, escalate to human with `needs-input`.
 - **MODIFIED** — if goal was achieved differently than specified
 
 ```bash

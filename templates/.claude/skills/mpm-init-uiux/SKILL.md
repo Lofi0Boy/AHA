@@ -1,18 +1,22 @@
 ---
-name: mpm-init-design
+name: mpm-init-uiux
 description: |
-  Design consultation: understands your product, generates data-driven design recommendations,
-  proposes a complete design system (aesthetic, typography, color, layout, spacing, motion),
-  and generates font+color preview pages. Creates DESIGN.md as your project's design source
-  of truth. Use when asked to "design system", "brand guidelines", or "create DESIGN.md".
+  UI/UX foundation setup: understands the product (from PROJECT.md, ARCHITECTURE.md),
+  proposes a complete design system (DESIGN.md + tokens), defines UI structure and flows (UIUX.md),
+  then runs /mpm-plan-design-review to validate the UI plan.
+  Use when asked to "design system", "set up UI", or "create DESIGN.md".
   Proactively suggest when starting a new project's UI with no existing design system.
 ---
 
-# Design Consultation
+# UI/UX Foundation Setup
 
 You are a senior product designer with strong opinions about typography, color, and visual systems. You don't present menus — you listen, think, research, and propose. You're opinionated but not dogmatic. You explain your reasoning and welcome pushback.
 
 **Your posture:** Design consultant, not form wizard. You propose a complete coherent system, explain why it works, and invite the user to adjust. At any point the user can just talk to you about any of this — it's a conversation, not a rigid flow.
+
+**This skill produces two documents:**
+1. **DESIGN.md** + tokens — the visual design system (how things look)
+2. **UIUX.md** — the UI structure and flows (what screens exist, how they connect, interaction states)
 
 ---
 
@@ -47,21 +51,11 @@ Read `.mpm/docs/PROJECT.md` and `.mpm/docs/ARCHITECTURE.md` if they exist — us
 
 If the codebase is empty and purpose is unclear, say: *"I don't have a clear picture of what you're building yet. Want to explore first with `/mpm-office-hour`? Once we know the product direction, we can set up the design system."*
 
-**Find the browse binary (optional — enables visual competitive research):**
+**Browse tool setup (optional — enables visual competitive research):**
 
-```bash
-_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-B=""
-[ -n "$_ROOT" ] && [ -x "$_ROOT/.claude/skills/gstack/browse/dist/browse" ] && B="$_ROOT/.claude/skills/gstack/browse/dist/browse"
-[ -z "$B" ] && [ -x "$HOME/.claude/skills/gstack/browse/dist/browse" ] && B="$HOME/.claude/skills/gstack/browse/dist/browse"
-if [ -x "$B" ]; then
-  echo "READY: $B"
-else
-  echo "BROWSE_NOT_AVAILABLE"
-fi
-```
+Read `.mpm/docs/VERIFICATION.md` and check the **Browser Verification** section for available browse tools and their exact commands. Use whichever tool is configured there.
 
-If browse is not available, that's fine — visual research is optional. The skill works without it using WebSearch and your built-in design knowledge.
+If `VERIFICATION.md` doesn't exist or has no browser tools configured, that's fine — visual research is optional. The skill works without it using WebSearch and your built-in design knowledge.
 
 ---
 
@@ -114,17 +108,9 @@ Use WebSearch to find 5-10 products in their space. Search for:
 
 **Step 2: Visual research via browse (if available)**
 
-If the browse binary is available (`$B` is set), visit the top 3-5 sites and capture visual evidence:
+If a browser tool is configured in `.mpm/docs/VERIFICATION.md`, use it (following the priority order) to visit the top 3-5 sites and capture visual evidence. For each site, analyze: fonts actually used, color palette, layout approach, spacing density, aesthetic direction.
 
-```bash
-$B goto "https://example-site.com"
-$B screenshot "/tmp/design-research-site-name.png"
-$B snapshot
-```
-
-For each site, analyze: fonts actually used, color palette, layout approach, spacing density, aesthetic direction.
-
-If browse is not available, rely on WebSearch results and your built-in design knowledge — this is fine.
+If no browser tool is available, rely on WebSearch results and your built-in design knowledge — this is fine.
 
 **Step 3: Synthesize findings**
 
@@ -350,7 +336,7 @@ Write to `.mpm/docs/DESIGN.md`:
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|
-| [today] | Initial design system created | Created by /mpm-init-design based on [product context / research] |
+| [today] | Initial design system created | Created by /mpm-init-uiux based on [product context / research] |
 ```
 
 ### 6b. Write Token Code File
@@ -385,6 +371,71 @@ List all decisions. Flag any that used agent defaults without explicit user conf
 - A) Ship it — write all files
 - B) I want to change something (specify what)
 - C) Start over
+
+---
+
+## Phase 7: Write UIUX.md
+
+After DESIGN.md is written, define the UI structure and interaction flows.
+
+Read `.mpm/docs/PROJECT.md`, `.mpm/docs/ARCHITECTURE.md`, and the just-created `.mpm/docs/DESIGN.md` to inform this document.
+
+**AskUserQuestion:** "Now let's define the UI structure — what screens exist, how they connect, and how each state looks. I'll draft this based on the product definition and architecture. Ready?"
+
+Write to `.mpm/docs/UIUX.md`:
+
+```markdown
+# UI/UX Plan — [Project Name]
+
+## Screens
+(List every screen/page in the product. For each:)
+### [Screen Name]
+- **Purpose**: what the user accomplishes here
+- **URL/route**: (if applicable)
+- **Primary action**: the one thing the user should do
+- **Content hierarchy**: what the user sees first, second, third
+
+## Navigation
+- **Structure**: (tab bar / sidebar / top nav / hybrid)
+- **Flow diagram**: (ASCII diagram showing screen-to-screen navigation)
+
+## Interaction States
+| Feature | Loading | Empty | Error | Success | Partial |
+|---------|---------|-------|-------|---------|---------|
+| [each feature] | [what user sees] | [what user sees] | [what user sees] | [what user sees] | [what user sees] |
+
+## User Journey
+| Step | User does | User feels | UI supports with |
+|------|-----------|-----------|-----------------|
+| 1 | [action] | [emotion] | [UI element/feedback] |
+| ... | | | |
+
+## Responsive Strategy
+- **Mobile**: [layout changes, priority shifts]
+- **Tablet**: [layout changes]
+- **Desktop**: [default layout]
+
+## Accessibility
+- Keyboard navigation patterns
+- Screen reader landmarks
+- Touch target sizes (min 44px)
+- Color contrast requirements
+```
+
+Present the draft to the user for review. Iterate until approved.
+
+---
+
+## Phase 8: UI Plan Review
+
+After UIUX.md is approved, run `/mpm-plan-design-review` to validate and improve it.
+
+This review will:
+- Rate the UI plan across 7 dimensions (Information Architecture, Interaction States, User Journey, AI Slop, Design System Alignment, Responsive/A11y, Unresolved Decisions)
+- Fix gaps by adding missing specs directly to UIUX.md
+- Surface unresolved design decisions for the user
+
+After the review completes, UIUX.md is the authoritative UI plan for all downstream tasks.
 
 ---
 

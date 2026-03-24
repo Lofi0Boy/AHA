@@ -173,7 +173,8 @@ Rejected tasks are picked up by the Planner agent via /mpm-recycle, which rewrit
 ## Rules
 
 - **All task JSON operations must go through `task.py`** — never read/write `.mpm/data/` JSON files directly.
-- **Dev never cataskslls `task.py complete`** — only humans (via dashboard) move tasks to past.
-- Append new  to the **back** of future.json.
+- **All task creation must use the `/mpm-task-write` skill** — never write task fields (title, prompt, goal, verification) manually. Always invoke `/mpm-task-write` to ensure consistent structure and quality. This applies to planners, devs, and any agent that creates tasks.
+- **Dev never calls `task.py complete`** — only humans (via dashboard) move tasks to past.
+- Append new tasks to the **back** of future.json.
 - Only one task per session in current.
 - Always respond to the user in their language.

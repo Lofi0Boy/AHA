@@ -35,6 +35,20 @@ STATEEOF
 echo "🚀 MPM Auto-Next activated"
 ```
 
+## Pre-flight: Verify tools work
+
+Before processing any tasks, confirm that all verification tools listed in `.mpm/docs/VERIFICATION.md` actually work.
+
+1. Read `.mpm/docs/VERIFICATION.md`
+2. For each tool listed, run a quick smoke test:
+   - **Test/Build**: run the command and confirm it exits successfully (e.g., `npm test`, `pytest --co -q`)
+   - **Browser tools**: run the exact commands from VERIFICATION.md's Browser Verification section to confirm the tool works and can reach the dev server
+   - **Dev server**: confirm it's running or start it, verify the URL responds
+   - **Linters/type checkers**: run and confirm they exit without error
+3. Report results to the user:
+   - **All pass** → proceed to workflow
+   - **Any fail** → tell the user which tool failed and how, ask how to fix or whether to proceed without it. **Do not start tasks until the user confirms.**
+
 ## Workflow
 
 1. Pop the next task:
@@ -43,12 +57,7 @@ echo "🚀 MPM Auto-Next activated"
    ```
 
 2. Read the task. `goal` and `verification` are already set by planner. Fill `approach`.
-   - **verification** (already set): HOW to check — prefer self-verification:
-     - `/chrome` — interact with live pages (click, type, scroll, read console). Best for UI verification
-     - `google-chrome --headless --screenshot=...` — quick static visual checks
-     - `curl -s URL | grep/jq ...` — API responses, HTML content
-     - Run tests, check files, execute scripts
-     - Ask user ONLY when genuinely impossible
+   - If `verification` is empty or missing: read `.mpm/docs/VERIFICATION.md` and choose the appropriate verification methods for this task. Fill `verification` via `task.py update` before starting work.
 
 3. Do the work.
 
