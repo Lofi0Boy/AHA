@@ -6,7 +6,7 @@ dist/
 build/
 node_modules/
 
-# Runtime data (not for distribution — this repo's own MPM state)
-/.mpm/
+# Runtime data (not for distribution — this repo's own AHA state)
+/.aha/
 /.claude/
 .gstack/

@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mpm"
+name = "aha"
 version = "0.1.0"
-description = "Multi Project Manager — Dashboard for AI coding agents"
+description = "AHA (Asynchronous Human & AI) — Dashboard for AI coding agents"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -21,10 +21,10 @@ dependencies = [
 ]
 
 [project.scripts]
-mpm = "mpm.cli:main"
+aha = "aha.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mpm"]
+packages = ["src/aha"]
 
 [tool.hatch.build.targets.wheel.shared-data]
-"templates" = "share/mpm/templates"
+"templates" = "share/aha/templates"
