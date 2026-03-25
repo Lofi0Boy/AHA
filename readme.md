@@ -157,25 +157,25 @@ Track progress with `/aha-project-progress`:
 │  [x] done  [~] in progress  [?] review  [ ] pending       │
 │                                                            │
 │  Phase 1. MVP Dashboard [active]                           │
-│  ██████░░░░░░░░░░░░░░  29%                                 │
+│  ######--------------  29%                                 │
 │                                                            │
 │  ├─ Goal 1. Task board with drag-and-drop                  │
-│  │  ██████████░░░░░░░░░░  50%                              │
+│  │  ##########----------  50%                              │
 │  │  [x] Create task card component                         │
 │  │  [?] Drag-and-drop task reordering                      │
 │  │                                                         │
 │  ├─ Goal 2. Real-time status updates                       │
-│  │  ███████░░░░░░░░░░░░░  33%                              │
+│  │  #######-------------  33%                              │
 │  │  [x] Set up Flask server with SocketIO                  │
 │  │  [~] Add WebSocket event broadcasting                   │
 │  │  [ ] Add WebSocket connection indicator                 │
 │  │                                                         │
 │  ├─ Goal 3. Human review interface                         │
-│  │  ░░░░░░░░░░░░░░░░░░░░  0%                              │
+│  │  --------------------  0%                              │
 │  │  [ ] Implement review card expand/collapse              │
 │  │  [ ] Add approve/reject/discard buttons                 │
 │  ──────────────────────────────────────────────────────────│
-│  Phase 2. Multi-project Support ░░░░░░░░░░░░░░░░░░░░  0%  │
+│  Phase 2. Multi-project Support --------------------  0%  │
 │                                                            │
 └────────────────────────────────────────────────────────────┘
 ```
